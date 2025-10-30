@@ -1,0 +1,64 @@
+[project]
+name = "review-ops"
+version = "0.1.0"
+description = "Stale PR detection and Slack notification tool"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "PyGithub>=2.1",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+    "-v",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "**/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "ANN",  # flake8-annotations
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ANN"]  # Don't require type hints in tests
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "pytest-mock>=3.12",
+    "ruff>=0.3",
+]
