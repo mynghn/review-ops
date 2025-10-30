@@ -13,6 +13,14 @@
 - Q: How should the system handle repositories with no branch protection rules (no required approvals configured)? → A: Default to requiring 1 approval
 - Q: What should the system do when GitHub API rate limits are hit during repository scanning? → A: Print error to console with rate limit reset time, allow user to retry manually (no Slack notification)
 - Q: When no stale PRs are found (all PRs are sufficiently approved or none exist), should the system still send a Slack notification? → A: Send a pleasing/celebratory message that celebrates the team's success
+- Q: How should the system handle team member usernames that don't exist on GitHub? → A: GitHub API will return no PRs for non-existent users; system logs warning but continues processing other team members
+- Q: How should the system handle PR approval state changes that happen during script execution (race conditions)? → A: Accept eventual consistency; snapshot data at query time reflects state at that moment (no real-time synchronization)
+- Q: How should the system handle PRs with complex approval requirements (CODEOWNERS, required reviewers)? → A: Trust GitHub's mergeable state API and branch protection rules to determine if PR has sufficient approval; system does not reimplement complex approval logic
+- Q: How should the system handle PRs where the team member is both author and requested reviewer? → A: Include the PR in results (matches filter criteria); this is a valid scenario where team member should be aware of the PR
+- Q: How does the system handle PRs in repositories the authenticated user doesn't have access to? → A: Skip inaccessible repositories with a warning logged to console; continue processing accessible repositories (partial results acceptable)
+- Q: What if the Slack webhook URL is invalid or Slack API returns an error? → A: Print error to console with webhook response details and exit with non-zero exit code; do not proceed with subsequent notifications
+- Q: How does the system handle very large organizations (100+ repositories)? → A: System processes all repositories sequentially; performance validated in SC-007 (deferred); no pagination limits for MVP
+- Q: What happens when a PR has never been marked "Ready for Review" (remains in draft)? → A: Draft PRs (ready_at = null) are excluded entirely from stale PR calculations; staleness measurement starts only when PR transitions to ready state
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -115,19 +123,19 @@ A development team can customize how staleness is calculated by configuring weig
 - **FR-007**: System MUST fetch all open pull requests across all organization repositories
 - **FR-008**: System MUST filter PRs to include only those where at least one team member is the author OR is in the requested reviewers list
 - **FR-009**: System MUST determine if a PR is in "Ready for Review" state (not draft)
-- **FR-010**: System MUST identify when a PR was marked "Ready for Review" by examining PR state transitions
+- **FR-010**: System MUST identify when a PR was marked "Ready for Review" using the GitHub API's `ready_at` timestamp field (null for draft PRs, set when transitioning to ready state). For MVP, this avoids complex timeline API parsing while meeting staleness calculation needs.
 - **FR-011**: System MUST check each PR's current approval status against the repository's approval requirements (defaulting to 1 required approval for repositories without branch protection rules)
 - **FR-012**: System MUST exclude PRs that currently have sufficient approvals based on repository branch protection rules (or the default of 1 approval if no rules exist)
 
 #### Staleness Calculation
 - **FR-013**: System MUST calculate staleness as time elapsed from the most recent of: "PR marked Ready for Review" OR "PR lost approval status" to current time
-- **FR-014**: System MUST track approval loss events by detecting when a PR had approving reviews that were subsequently dismissed or invalidated
+- **FR-014**: System MUST track approval loss events by detecting when a PR had approvals that were subsequently dismissed or invalidated
 - **FR-015**: System MUST track approval loss events when new commits are pushed to a PR after approval (if repository settings invalidate approvals on new commits)
-- **FR-016**: System MUST express staleness in days for PRs waiting 1+ day, and hours for PRs waiting less than 24 hours
+- **FR-016**: System MUST express staleness in hours for PRs waiting less than 24 hours (e.g., "3 hours", "23 hours") and in days for PRs waiting 1+ day (e.g., "2 days", "5 days"). Implementation must format the float staleness_days value appropriately for display.
 
 #### Sorting & Filtering
 - **FR-017**: System MUST sort filtered PRs by staleness in descending order (most stale first)
-- **FR-018**: System MUST handle PRs with identical staleness by applying a secondary sort (e.g., by PR creation date)
+- **FR-018**: System MUST handle PRs with identical staleness by applying a secondary sort by PR creation date (oldest first)
 
 #### Slack Notification (P1)
 - **FR-019**: System MUST format the sorted PR list as a Slack message with basic text formatting
@@ -140,7 +148,7 @@ A development team can customize how staleness is calculated by configuring weig
 - **FR-024**: System MUST format PRs as Slack Block Kit blocks or message attachments for rich visual presentation
 - **FR-025**: System MUST include in each enhanced PR entry: repository name, PR number, PR title, author username, clickable PR URL, staleness value, approval progress (current vs required)
 - **FR-026**: System MUST apply color coding to PR entries based on staleness severity thresholds
-- **FR-027**: System MUST ensure the Slack message respects Slack's formatting and size constraints
+- **FR-027**: System MUST ensure the Slack message respects Slack's formatting and size constraints (40,000 characters max, 50 blocks max). When approaching limits, truncate the PR list with a footer message indicating "... and N more PRs" to maintain deliverability.
 
 #### Configurable Scoring (P3)
 - **FR-028**: System MUST support loading optional staleness scoring rules from configuration
@@ -149,7 +157,7 @@ A development team can customize how staleness is calculated by configuring weig
 - **FR-031**: System MUST document available scoring rule types in configuration schema
 
 #### Error Handling
-- **FR-032**: System MUST handle GitHub API errors gracefully and report them to the user
+- **FR-032**: System MUST handle GitHub API errors by logging the error details, displaying a clear user-facing message indicating the failure reason, and exiting with appropriate non-zero exit code
 - **FR-033**: System MUST handle GitHub API rate limiting by printing an error message to console that includes the rate limit reset time, then exiting to allow the user to manually retry after the reset window (no Slack notification for rate limit errors)
 - **FR-034**: System MUST handle missing configuration values with clear error messages
 - **FR-035**: System MUST handle network failures when communicating with GitHub or Slack APIs
@@ -157,15 +165,15 @@ A development team can customize how staleness is calculated by configuring weig
 
 ### Key Entities
 
-- **Team Member Configuration**: A list of GitHub usernames representing the development team for which to track PRs. Includes: username (string).
+- **Team Member Configuration**: A list of GitHub usernames representing the development team for which to track PRs. Includes: github_username (string), slack_user_id (string, optional - for @mentions in Slack messages).
 
-- **Pull Request**: Represents an open GitHub pull request. Includes: repository name, PR number, PR title, author username, list of requested reviewer usernames, current state (draft or ready), ready-for-review timestamp, approval status (sufficient or insufficient), current approval count, required approval count, URL to PR.
+- **Pull Request**: Represents an open GitHub pull request. Includes: repository name, PR number, PR title, author username, list of requested reviewer usernames, created_at timestamp, ready_at timestamp (null if draft), approval status (sufficient or insufficient), current approval count, required approval count, base_branch (target branch), URL to PR.
 
-- **Approval Event**: Represents a change in a PR's approval status. Includes: PR identifier, timestamp of event, event type (approved, approval-dismissed, approval-invalidated), resulting approval status.
+- **Approval Event**: Represents a change in a PR's approval status. Includes: PR identifier, timestamp of event, event type (approved, approval-dismissed, approval-invalidated), resulting approval status. *Note: This is a conceptual entity derived from GitHub API responses; not persisted as a dataclass in the implementation. Used transiently during staleness calculation.*
 
 - **Staleness Score**: The calculated priority value for a PR based on time without sufficient approval. Includes: PR identifier, base staleness in days, effective staleness (if custom scoring applied), staleness category (low/medium/high based on thresholds).
 
-- **Configuration**: System settings and credentials. Includes: team member usernames list, GitHub organization name, GitHub authentication token, Slack webhook URL, optional staleness scoring rules.
+- **Configuration**: System settings and credentials. Includes: team member usernames list, GitHub organization name, GitHub authentication token, Slack webhook URL, log_level (string, default: "INFO"), api_timeout (integer, default: 30 seconds), optional staleness scoring rules.
 
 ## Success Criteria *(mandatory)*
 
@@ -173,19 +181,19 @@ A development team can customize how staleness is calculated by configuring weig
 
 - **SC-001**: Team members can execute the script and receive a Slack notification with the stale PR list within 2 minutes for organizations with up to 50 repositories.
 
-- **SC-002**: The staleness calculation accurately reflects the time since "Ready for Review" or "Approval Lost" events with less than 1 hour margin of error (accounting for API data freshness).
+- **SC-002**: The staleness calculation accurately reflects the time since "Ready for Review" or "Approval Lost" events with less than 1 hour margin of error (accounting for API data freshness). *(Validated through unit tests T026-T030 and integration tests T040-T044)*
 
 - **SC-003**: The system correctly identifies and excludes PRs that currently have sufficient approval according to repository-specific rules, with 100% accuracy in filtering.
 
-- **SC-004**: The Slack message is delivered successfully to the configured channel 95% of the time (allowing for transient network issues).
+- **SC-004**: The Slack message is delivered successfully to the configured channel 95% of the time (allowing for transient network issues). *(Validated through integration tests T045-T048 and real-world testing T104)*
 
-- **SC-005**: Team code review response time improves by at least 30% (measured as average time from PR ready-to-review to first approval) after 2 weeks of regular stale PR board usage.
+- **SC-005**: Team code review response time improves by at least 30% (measured as average time from PR ready-to-review to first approval) after 2 weeks of regular stale PR board usage. *(Deferred to post-MVP: Baseline measurement and tracking mechanism to be implemented after initial deployment)*
 
-- **SC-006**: The sorted PR list prioritization is perceived as accurate by 80% of team members (validated through informal survey or feedback).
+- **SC-006**: The sorted PR list prioritization is perceived as accurate by 80% of team members (validated through Slack poll or Google Form survey after 2 weeks of usage). *(Deferred to post-MVP: Survey mechanism to be implemented after initial deployment)*
 
-- **SC-007**: The system handles organizations with up to 100 repositories and 200 open PRs without requiring more than 3 minutes execution time.
+- **SC-007**: The system handles organizations with up to 100 repositories and 200 open PRs without requiring more than 3 minutes execution time. *(Deferred to post-MVP: Formal performance benchmarking to be conducted after P1 implementation; informal testing during development sufficient for MVP)*
 
-- **SC-008**: Error messages for common issues (missing config, invalid credentials, API errors) are clear enough that team members can self-resolve 90% of issues without developer support.
+- **SC-008**: Error messages for common issues (missing config, invalid credentials, API errors) are clear enough that team members can self-resolve 90% of issues without developer support. *(Validated through unit tests T031-T035, error handling tasks T044/T056/T065, and manual testing T107)*
 
 ## Assumptions
 
@@ -214,3 +222,5 @@ The following assumptions have been made to provide reasonable defaults where sp
 11. **Approval Progress Calculation (P2)**: "Current approval count" is the number of unique approving reviews that are currently valid (not dismissed, not invalidated by new commits). "Required approval count" is derived from branch protection rules for the PR's target branch.
 
 12. **Timezone Handling**: All timestamps are compared in UTC to ensure consistent staleness calculations regardless of where the script is executed.
+
+13. **Success Criteria Measurement Deferral**: SC-005 (response time improvement), SC-006 (team perception survey), and SC-007 (performance benchmarking) require longitudinal data collection and measurement infrastructure that is deferred to post-MVP. MVP focuses on delivering core functionality; measurement mechanisms will be added after initial deployment and usage validation.

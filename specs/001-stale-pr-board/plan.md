@@ -243,12 +243,21 @@ Define all entities with complete type annotations:
 - PullRequest → transformed into StalePR if lacking sufficient approval
 - StalePR list → sorted by staleness_days (descending) → formatted into Slack message
 
+**Note on ApprovalEvent**: The spec.md defines an ApprovalEvent entity, but it is not implemented as a dataclass in the plan. Rationale: Approval events are transient API responses used to calculate staleness, not persistent domain objects. The staleness calculation algorithm derives timing information from PR commits and reviews without storing intermediate events.
+
 ### 2. API Contracts (`contracts/` directory)
 
 **team_members.schema.json**
 - JSON schema defining team_members.json structure
 - Array of objects with required `github_username` field (string)
 - Optional `slack_user_id` field for @mentions
+
+**staleness_rules.schema.json** *(P3 - Configurable Scoring)*
+- JSON schema defining staleness_rules.json structure
+- Optional repository_weights object (repo name → multiplier)
+- Optional label_bonuses object (label name → added days)
+- Optional custom_thresholds for staleness categories
+- Documents available scoring rule types per FR-031
 
 **github_api_contract.md**
 - Document all GitHub API endpoints used
@@ -346,9 +355,11 @@ Algorithm (commit-based, simplified for MVP):
 - Multiple commits after approval: Uses most recent commit time
 - No branch protection rules: Defaults to requiring 1 approval
 
+**Simplification Note (FR-010)**: Spec.md FR-010 requires "examining PR state transitions" to identify when a PR was marked "Ready for Review". The plan simplifies this by using the PR's `ready_at` timestamp directly from the GitHub API, avoiding complex timeline API parsing. This MVP approach is sufficient for staleness calculation and aligns with the Simplicity First principle. The `ready_at` field is null for draft PRs and set when the PR transitions to ready state.
+
 **Future Enhancements** (P2/P3):
 - Check `dismiss_stale_reviews` setting per branch
-- Parse timeline API for exact `ready_for_review` events
+- Parse timeline API for exact `ready_for_review` events if `ready_at` proves insufficient
 - Detect manual vs automatic review dismissals
 
 ### Slack Message Format

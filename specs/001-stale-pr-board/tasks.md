@@ -116,8 +116,11 @@ description: "Task list for Stale PR Board implementation"
 - [ ] T057 [US1] Implement SlackClient class in src/slack_client.py with __init__(webhook_url, timeout) constructor
 - [ ] T058 [US1] Add format_stale_prs_message() method to SlackClient in src/slack_client.py that creates basic text message sorted by staleness
 - [ ] T059 [US1] Add format_celebration_message() method to SlackClient in src/slack_client.py for when no stale PRs found
+- [ ] T059a [US1] Add _format_staleness() helper method to SlackClient in src/slack_client.py that formats staleness_days as "N hours" for values <1.0, "N days" for values ≥1.0 (implements FR-016)
 - [ ] T060 [US1] Add send_message() method to SlackClient in src/slack_client.py that posts to webhook URL
+- [ ] T060a [US1] Add network error handling to send_message() in src/slack_client.py for connection failures, timeouts, and invalid webhook responses (implements FR-035 for Slack)
 - [ ] T061 [US1] Create main() function in src/app.py that orchestrates: load config → load team → fetch PRs → calculate staleness → send to Slack
+- [ ] T061a [US1] Implement secondary sort in main() function in src/app.py to sort PRs with identical staleness by creation date (oldest first) per FR-018
 - [ ] T062 [US1] Add CLI argument parsing to src/app.py for optional --dry-run flag that prints message without sending
 - [ ] T063 [US1] Add logging configuration to src/app.py using stdlib logging with configurable level from .env
 - [ ] T064 [US1] Add __main__ block to src/app.py to enable python -m src.app execution
@@ -149,10 +152,11 @@ description: "Task list for Stale PR Board implementation"
 - [ ] T074 [US2] Add _group_by_category() helper method to SlackClient in src/slack_client.py that groups StalePRs into rotten/aging/fresh lists
 - [ ] T075 [US2] Add _format_category_section() method to SlackClient in src/slack_client.py that creates category header with emoji and count
 - [ ] T076 [US2] Add _format_pr_row() method to SlackClient in src/slack_client.py with rich formatting: emoji, clickable link, title, author, reviewers, staleness, approval progress
+- [ ] T076a [US2] Update _format_pr_row() in src/slack_client.py to use _format_staleness() helper for consistent hours/days display per FR-016
 - [ ] T077 [US2] Add _format_user_mention() helper to SlackClient in src/slack_client.py that uses <@USER_ID> format when slack_user_id available, otherwise @username
 - [ ] T078 [US2] Add _create_footer_context() method to SlackClient in src/slack_client.py with generation timestamp
 - [ ] T079 [US2] Update format_celebration_message() in src/slack_client.py to use Block Kit with 🎉 emoji and engaging text
-- [ ] T080 [US2] Add message size validation to SlackClient in src/slack_client.py to ensure under 40,000 chars and 50 blocks
+- [ ] T080 [US2] Add message size validation to SlackClient in src/slack_client.py to ensure under 40,000 chars and 50 blocks; implement truncation logic that removes PRs from the end of the list and adds footer "... and N more PRs" when limits approached (implements FR-027 overflow handling)
 
 **Checkpoint**: Slack messages are now visually rich with Block Kit formatting, making it easy to scan and prioritize PRs
 
@@ -177,6 +181,7 @@ description: "Task list for Stale PR Board implementation"
 
 - [ ] T087 [P] [US3] Create StalenessRules dataclass in src/models.py with repository_weights (dict), label_bonuses (dict), custom_thresholds (optional)
 - [ ] T088 [US3] Add load_staleness_rules() function to src/config.py that loads optional staleness_rules.json
+- [ ] T088a [US3] Create specs/001-stale-pr-board/contracts/staleness_rules.schema.json defining JSON schema for scoring rules configuration (implements FR-031 documentation requirement)
 - [ ] T089 [US3] Create staleness_rules.json.example with sample configuration (repository weights, label bonuses)
 - [ ] T090 [US3] Update .gitignore to exclude staleness_rules.json (optional user config)
 - [ ] T091 [US3] Extend calculate_staleness() in src/staleness.py to accept optional StalenessRules parameter
@@ -320,16 +325,16 @@ With multiple developers:
 
 ## Notes
 
-- **Total tasks**: 108 tasks
+- **Total tasks**: 113 tasks
 - **Task breakdown by phase**:
   - Phase 1 (Setup): 12 tasks
   - Phase 2 (Foundational): 13 tasks
-  - Phase 3 (US1 - MVP): 41 tasks (23 tests + 18 implementation)
-  - Phase 4 (US2): 14 tasks (6 tests + 8 implementation)
-  - Phase 5 (US3): 17 tasks (6 tests + 11 implementation)
+  - Phase 3 (US1 - MVP): 44 tasks (23 tests + 21 implementation)
+  - Phase 4 (US2): 15 tasks (6 tests + 9 implementation)
+  - Phase 5 (US3): 18 tasks (6 tests + 12 implementation)
   - Phase 6 (Polish): 11 tasks
 - **Parallel opportunities**: ~45 tasks marked [P] can run in parallel within their phase
-- **MVP scope**: Phases 1-3 = 66 tasks (61% of total) delivers full core value
+- **MVP scope**: Phases 1-3 = 69 tasks (61% of total) delivers full core value
 - [P] tasks = different files, no dependencies
 - [Story] label maps task to specific user story for traceability
 - Each user story should be independently completable and testable
