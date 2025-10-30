@@ -1,50 +1,102 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+SYNC IMPACT: v1.0.0 (Initial) | Ratified: 2025-10-30
+
+Core Principles: 3 (Simplicity First, Small Scope, Test-Driven Quality)
+- Merged "Prefer Real Components" into Principle III
+- Merged "Incremental Delivery" into Principle II + Development Workflow
+
+Templates Updated:
+✅ tasks-template.md - Changed tests from OPTIONAL to MANDATORY (5 locations)
+✅ spec-template.md - Already aligned with prioritized stories
+✅ plan-template.md - Constitution check section present
+
+Key Changes:
+- TDD now mandatory with justified exception process
+- Added scope breakdown guidance table in Principle II
+- Simplified governance to essentials only
+-->
+
+# Review-Ops Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Simplicity First (NON-NEGOTIABLE)
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+Start with the simplest solution. Add complexity only when justified with documented rationale.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+**MUST NOT**:
+- Add abstractions, patterns, or layers without demonstrable need
+- Introduce architectural complexity speculatively
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+**Justify before adding**:
+- Repository patterns (when direct access works)
+- Multiple services (when one works)
+- Frameworks (when simple code works)
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### II. Small Scope (NON-NEGOTIABLE)
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Every feature MUST fit within one specify-plan-tasks-implement cycle (3-5 days).
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+**Breaking down large requirements**:
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+| When you have | Break it into | Example |
+|---------------|---------------|---------|
+| Multiple user personas | One feature per persona | Admin UI → User UI → Guest UI |
+| End-to-end workflow | One phase per feature | Data ingestion → Processing → Reporting |
+| CRUD operations | One operation per iteration | Create → Read → Update → Delete |
+| Multiple data entities | One entity per feature | Users → Posts → Comments |
+| Complex UI screens | One screen/section per feature | Dashboard → Settings → Profile |
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Each iteration MUST**:
+- Deliver independently testable value
+- Have P1 story as viable MVP
+- Complete in single cycle
+
+**If scope still too large**: Further decompose P1 into sub-stories (P1a, P1b, etc.).
+
+### III. Test-Driven Quality (NON-NEGOTIABLE)
+
+TDD is mandatory: Write tests → Verify they fail → Implement → Tests pass.
+
+**MUST**:
+- Write automated tests for every user story
+- Use real components over mocks (unless justified below)
+- Define clear acceptance scenarios
+
+**Mocks allowed only when**:
+- Real component needs external services (APIs, paid services)
+- Setup complexity exceeds value (multi-service orchestration)
+- Test execution becomes impractical (>1s per test)
+
+**Exception process**:
+- Experimental/prototype work may defer tests
+- MUST document why and plan to add tests before production
+- Constitution check flags missing tests as violation
+
+## Development Workflow
+
+**Specify** → Define user scenarios, prioritize (P1 = MVP)
+**Plan** → Constitution check, identify foundational vs story work
+**Tasks** → Organize by user story, mark [P]arallel tasks
+**Implement** → TDD cycle, validate each story independently
+
+**Key checkpoints**:
+- After foundational phase: Can user stories start?
+- After each story: Does it work independently?
+- After P1: Validate MVP before continuing to P2
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+**Amendments**: Document rationale + impact analysis
+**Versioning**: MAJOR.MINOR.PATCH (semantic versioning)
+**Compliance**: Constitution check during planning phase
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Code reviews verify**:
+- Scope fits single iteration
+- Complexity is justified
+- Tests validate real behavior
+- Stories are independent
+
+---
+
+**Version**: 1.0.0 | **Ratified**: 2025-10-30 | **Last Amended**: 2025-10-30
