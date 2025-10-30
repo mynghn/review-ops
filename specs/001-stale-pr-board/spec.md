@@ -5,6 +5,15 @@
 **Status**: Draft
 **Input**: User description: "Build an application -more of a script- that helps a dev team to do their code-reviews in time, by 1) fetching all the GitHub PRs made by or review-requested to any one of them 2) and sorting them by their staleness of not getting approved since the creation 3) and finally present the sorted in staleness descending order list of PRs with proper visualized UI that triggers interest and attention for them to eventually do code review for stale PRs. Final UI could be any form, but as a MVP, sending aesthetically intriguing slack message when run would be fine."
 
+## Clarifications
+
+### Session 2025-10-31
+
+- Q: How should the system securely store and access GitHub tokens and Slack webhook URLs? → A: Environment variables via .env file (gitignored)
+- Q: How should the system handle repositories with no branch protection rules (no required approvals configured)? → A: Default to requiring 1 approval
+- Q: What should the system do when GitHub API rate limits are hit during repository scanning? → A: Print error to console with rate limit reset time, allow user to retry manually (no Slack notification)
+- Q: When no stale PRs are found (all PRs are sufficiently approved or none exist), should the system still send a Slack notification? → A: Send a pleasing/celebratory message that celebrates the team's success
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Basic Stale PR Detection & Notification (Priority: P1)
@@ -32,6 +41,8 @@ A development team lead runs a command-line tool that identifies all open pull r
 7. **Given** 10 PRs with varying staleness from 1 to 10 days, **When** the Slack message is generated, **Then** PRs are ordered with the 10-day stale PR at the top and the 1-day stale PR at the bottom.
 
 8. **Given** a team configuration with usernames ["alice", "bob", "charlie"] and a GitHub org with 20 repositories, **When** the script runs, **Then** it successfully queries all repositories and returns results within reasonable time (under 2 minutes for typical org sizes).
+
+9. **Given** a GitHub organization where all open PRs involving team members currently have sufficient approvals (or no open PRs exist), **When** the script executes, **Then** a pleasing/celebratory Slack message is sent confirming no stale PRs were found and celebrating the team's success in keeping reviews current.
 
 ---
 
@@ -77,9 +88,9 @@ A development team can customize how staleness is calculated by configuring weig
 
 ### Edge Cases
 
-- What happens when GitHub API rate limits are hit during org repository scanning?
+- When GitHub API rate limits are hit, system prints error to console with rate limit reset time and exits, allowing user to manually retry after the reset window (no Slack notification sent)
 - How does the system handle PRs in repositories the authenticated user doesn't have access to?
-- What if a repository has no branch protection rules (no required approvals)?
+- Repositories with no branch protection rules default to requiring 1 approval (PRs with 0 approvals are considered stale, PRs with 1+ approvals are considered sufficiently approved)
 - How does the system handle team member usernames that don't exist on GitHub?
 - What happens when a PR has never been marked "Ready for Review" (remains in draft)?
 - How does the system handle PR approval state changes that happen during script execution?
@@ -95,8 +106,8 @@ A development team can customize how staleness is calculated by configuring weig
 #### Configuration & Setup
 - **FR-001**: System MUST load configuration from a file specifying team member GitHub usernames (array of strings)
 - **FR-002**: System MUST load GitHub organization name from configuration
-- **FR-003**: System MUST load GitHub authentication token from configuration or environment variable
-- **FR-004**: System MUST load Slack webhook URL from configuration or environment variable
+- **FR-003**: System MUST load GitHub authentication token from environment variables (using .env file for local development, gitignored to prevent credential leakage)
+- **FR-004**: System MUST load Slack webhook URL from environment variables (using .env file for local development, gitignored to prevent credential leakage)
 - **FR-005**: System MUST validate all required configuration values are present before execution
 
 #### GitHub Integration
@@ -105,8 +116,8 @@ A development team can customize how staleness is calculated by configuring weig
 - **FR-008**: System MUST filter PRs to include only those where at least one team member is the author OR is in the requested reviewers list
 - **FR-009**: System MUST determine if a PR is in "Ready for Review" state (not draft)
 - **FR-010**: System MUST identify when a PR was marked "Ready for Review" by examining PR state transitions
-- **FR-011**: System MUST check each PR's current approval status against the repository's approval requirements
-- **FR-012**: System MUST exclude PRs that currently have sufficient approvals based on repository branch protection rules
+- **FR-011**: System MUST check each PR's current approval status against the repository's approval requirements (defaulting to 1 required approval for repositories without branch protection rules)
+- **FR-012**: System MUST exclude PRs that currently have sufficient approvals based on repository branch protection rules (or the default of 1 approval if no rules exist)
 
 #### Staleness Calculation
 - **FR-013**: System MUST calculate staleness as time elapsed from the most recent of: "PR marked Ready for Review" OR "PR lost approval status" to current time
@@ -123,25 +134,26 @@ A development team can customize how staleness is calculated by configuring weig
 - **FR-020**: System MUST include in each PR entry: repository name, PR number, PR title, staleness value
 - **FR-021**: System MUST send the formatted message to the configured Slack webhook URL
 - **FR-022**: System MUST handle Slack API response and report success or failure to the user
+- **FR-023**: System MUST send a pleasing/celebratory Slack message when no stale PRs are found, confirming the check completed successfully with all PRs sufficiently approved
 
 #### Enhanced Slack UI (P2)
-- **FR-023**: System MUST format PRs as Slack Block Kit blocks or message attachments for rich visual presentation
-- **FR-024**: System MUST include in each enhanced PR entry: repository name, PR number, PR title, author username, clickable PR URL, staleness value, approval progress (current vs required)
-- **FR-025**: System MUST apply color coding to PR entries based on staleness severity thresholds
-- **FR-026**: System MUST ensure the Slack message respects Slack's formatting and size constraints
+- **FR-024**: System MUST format PRs as Slack Block Kit blocks or message attachments for rich visual presentation
+- **FR-025**: System MUST include in each enhanced PR entry: repository name, PR number, PR title, author username, clickable PR URL, staleness value, approval progress (current vs required)
+- **FR-026**: System MUST apply color coding to PR entries based on staleness severity thresholds
+- **FR-027**: System MUST ensure the Slack message respects Slack's formatting and size constraints
 
 #### Configurable Scoring (P3)
-- **FR-027**: System MUST support loading optional staleness scoring rules from configuration
-- **FR-028**: System MUST apply configured staleness weights or multipliers when scoring rules are defined
-- **FR-029**: System MUST sort PRs by adjusted staleness score when custom scoring is enabled
-- **FR-030**: System MUST document available scoring rule types in configuration schema
+- **FR-028**: System MUST support loading optional staleness scoring rules from configuration
+- **FR-029**: System MUST apply configured staleness weights or multipliers when scoring rules are defined
+- **FR-030**: System MUST sort PRs by adjusted staleness score when custom scoring is enabled
+- **FR-031**: System MUST document available scoring rule types in configuration schema
 
 #### Error Handling
-- **FR-031**: System MUST handle GitHub API errors gracefully and report them to the user
-- **FR-032**: System MUST handle GitHub API rate limiting by reporting the issue and suggesting retry timing
-- **FR-033**: System MUST handle missing configuration values with clear error messages
-- **FR-034**: System MUST handle network failures when communicating with GitHub or Slack APIs
-- **FR-035**: System MUST continue processing remaining PRs if individual PR data retrieval fails (with logging)
+- **FR-032**: System MUST handle GitHub API errors gracefully and report them to the user
+- **FR-033**: System MUST handle GitHub API rate limiting by printing an error message to console that includes the rate limit reset time, then exiting to allow the user to manually retry after the reset window (no Slack notification for rate limit errors)
+- **FR-034**: System MUST handle missing configuration values with clear error messages
+- **FR-035**: System MUST handle network failures when communicating with GitHub or Slack APIs
+- **FR-036**: System MUST continue processing remaining PRs if individual PR data retrieval fails (with logging)
 
 ### Key Entities
 
@@ -181,7 +193,7 @@ The following assumptions have been made to provide reasonable defaults where sp
 
 1. **Execution Model**: The script is executed manually on-demand (via command line) rather than running on a schedule or continuously. Future iterations could add scheduled execution, but P1 focuses on the simplest invocation model.
 
-2. **GitHub Authentication**: A GitHub Personal Access Token (classic or fine-grained) with appropriate scopes (`repo:read`, `org:read`) is used for authentication. The token is stored securely in a configuration file or environment variable.
+2. **GitHub Authentication**: A GitHub Personal Access Token (classic or fine-grained) with appropriate scopes (`repo:read`, `org:read`) is used for authentication. The token is loaded from environment variables via a .env file (gitignored) for local development, ensuring credentials are never committed to version control.
 
 3. **Slack Integration Method**: A Slack incoming webhook URL is used to post messages. This is the simplest integration method requiring no OAuth or app installation, suitable for MVP.
 
