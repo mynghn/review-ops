@@ -9,7 +9,7 @@
 
 ### User Story 1 - Rate Limit Detection & Graceful Degradation (Priority: P1)
 
-When the application encounters GitHub API rate limits during a scheduled run for a 5-member team, the system detects the limit status, informs the user about the situation, and either completes with partial results or waits until the limit resets instead of crashing or getting stuck.
+When the application encounters GitHub API rate limits during a scheduled run for a 5-member team, the system detects the limit status, informs the user about the situation, and either waits until the limit resets (if <5 minutes) or fails fast with clear error messaging (if >5 minutes) instead of crashing or getting stuck.
 
 **Why this priority**: This is the most critical issue - the current app gets "stuck" and fails completely when hitting rate limits, making it unusable for even small teams. Fixing this provides immediate value by ensuring the app always completes its run successfully.
 
@@ -18,55 +18,62 @@ When the application encounters GitHub API rate limits during a scheduled run fo
 **Acceptance Scenarios**:
 
 1. **Given** the application starts with low rate limit remaining (< 100 requests), **When** the user runs the stale PR board, **Then** the system displays a warning message indicating the rate limit is low and may affect results
-2. **Given** the application exhausts the rate limit mid-run, **When** continuing to fetch PR data, **Then** the system displays the rate limit reset time and either waits (if reset is < 5 minutes away) or completes with partial results
-3. **Given** the application successfully detects low rate limits, **When** the run completes, **Then** the user receives a clear summary showing what was processed and what was skipped due to rate limits
-4. **Given** the rate limit will reset in 2 minutes, **When** the app detects exhausted quota, **Then** the system waits with a countdown message and automatically resumes after reset
+2. **Given** the application exhausts the rate limit mid-run with reset <5 minutes away, **When** the system detects this, **Then** it waits with a countdown message and automatically resumes after reset
+3. **Given** the application exhausts the rate limit mid-run with reset >5 minutes away, **When** running in normal mode, **Then** the system logs a clear error message and exits with non-zero status without sending Slack message
+4. **Given** the application exhausts the rate limit mid-run with reset >5 minutes away, **When** running in dry-run mode, **Then** the system displays partial results with a warning showing what was fetched and what reset time is
+5. **Given** the rate limit reset time is >1 hour away, **When** the app detects exhausted quota, **Then** the system immediately exits with error indicating abnormal rate limit state and suggesting investigation
 
 ---
 
 ### User Story 2 - Smart Retry with Exponential Backoff (Priority: P2)
 
-When GitHub API calls fail due to rate limiting or temporary network issues, the system automatically retries failed requests with increasing wait times between attempts, ensuring successful completion without requiring manual re-runs.
+When GitHub API calls fail specifically due to rate limiting (HTTP 429), the system automatically retries failed requests with increasing wait times between attempts, ensuring successful completion without requiring manual re-runs. Network errors fail immediately without retry.
 
-**Why this priority**: Automatic retry significantly improves reliability and user experience by handling transient failures gracefully. This builds on P1 by making the rate limit handling more sophisticated and resilient.
+**Why this priority**: Automatic retry for rate limit errors significantly improves reliability by handling predictable GitHub API throttling gracefully. Network errors fail fast since they're unlikely to resolve within seconds, letting the next scheduled run handle them.
 
-**Independent Test**: Can be tested by simulating API failures (rate limit errors, network timeouts) and verifying the system retries with correct backoff intervals (1s, 2s, 4s) and eventually succeeds or provides clear failure messages after exhausting retries.
+**Independent Test**: Can be tested by simulating rate limit errors (HTTP 429) and verifying the system retries with correct backoff intervals (1s, 2s, 4s) and eventually succeeds or provides clear failure messages after exhausting retries. Can also verify that network errors cause immediate failure without retry attempts.
 
 **Acceptance Scenarios**:
 
 1. **Given** a GitHub API call fails with rate limit error (HTTP 429), **When** the system processes the error, **Then** it waits for the recommended retry-after duration and automatically retries the request
-2. **Given** a GitHub API call fails with temporary network error, **When** the retry mechanism activates, **Then** the system waits 1 second before the first retry, 2 seconds before the second retry, and 4 seconds before the third retry
-3. **Given** a GitHub API call fails after 3 retry attempts, **When** all retries are exhausted, **Then** the system logs the specific error, continues with remaining PRs, and reports the failure in the final summary
+2. **Given** a GitHub API call fails with rate limit error (HTTP 429), **When** the retry mechanism activates, **Then** the system waits 1 second before the first retry, 2 seconds before the second retry, and 4 seconds before the third retry
+3. **Given** a GitHub API call fails with rate limit error after 3 retry attempts, **When** all retries are exhausted, **Then** the system logs the specific error, continues with remaining PRs, and reports the failure in the final summary
 4. **Given** the rate limit resets during a retry wait period, **When** the wait completes, **Then** the system successfully fetches the data and continues normal operation
+5. **Given** a GitHub API call fails with network error (timeout, connection refused, DNS failure), **When** the error is detected, **Then** the system immediately logs the error and exits without retry attempts
 
 ---
 
-### User Story 3 - API Call Optimization (Priority: P3)
+### User Story 3 - API Call Optimization via Deduplication (Priority: P3)
 
-The application minimizes GitHub API quota usage by eliminating redundant API calls, caching PR data between runs, and only fetching data that has changed since the last run, enabling support for larger teams within standard rate limits.
+The application minimizes GitHub API quota usage by eliminating redundant API calls within a single run through in-memory deduplication, ensuring each unique PR is fetched exactly once even when it appears in multiple team members' search results.
 
 **Why this priority**: While P1 and P2 handle rate limits reactively, this proactively reduces API usage to prevent hitting limits in the first place. This is lower priority because the app should work reliably before being optimized.
 
-**Independent Test**: Can be tested by running the app twice in succession and verifying: (1) second run uses fewer API calls, (2) cached data is used where valid, (3) only changed PRs trigger new API calls, and (4) overall API usage decreases by 50%+ compared to baseline.
+**Independent Test**: Can be tested by running the app with team members who share common PRs and verifying: (1) each unique PR is fetched only once, (2) in-memory tracking prevents redundant fetches, and (3) overall API usage decreases by 30-50% compared to naive implementation.
 
 **Acceptance Scenarios**:
 
-1. **Given** the application has cached PR data from a previous run within the last 5 minutes, **When** fetching team PRs, **Then** the system uses cached data for unchanged PRs instead of making new API calls
-2. **Given** the application performs a search for team member PRs, **When** multiple team members are authors of the same PR, **Then** the PR is fetched exactly once (deduplication already exists but should be verified)
-3. **Given** the application needs to check PR details, **When** the PR was already fetched in the current run, **Then** the system reuses the in-memory PR data instead of re-fetching
-4. **Given** the application completes a run, **When** calculating total API usage, **Then** the system logs the number of API calls made and compares it to the theoretical maximum (showing optimization percentage)
-5. **Given** cached PR data exists but is older than 5 minutes, **When** the application runs, **Then** the system ignores stale cache and fetches fresh data
+1. **Given** the application performs a search for team member PRs, **When** multiple team members are authors or reviewers of the same PR, **Then** the PR is fetched exactly once and reused for all relevant team members
+2. **Given** the application needs to check PR details, **When** the PR was already fetched in the current run, **Then** the system reuses the in-memory PR data instead of re-fetching
+3. **Given** the application completes a run, **When** calculating total API usage, **Then** the system logs the number of API calls made and compares it to the theoretical maximum without deduplication (showing optimization percentage)
+4. **Given** the application encounters the same PR URL multiple times, **When** tracking fetched PRs, **Then** the system uses the PR URL as the unique identifier for deduplication
 
 ---
 
 ### Edge Cases
 
-- What happens when the rate limit reset time is in the distant future (> 1 hour)?
-- How does the system handle GitHub API returning inconsistent rate limit data?
-- What happens when the cache becomes corrupted or contains invalid data?
-- How does the system behave when network connectivity is intermittent during retry attempts?
 - What happens when gh CLI commands time out instead of returning rate limit errors?
-- How does the system handle very large organizations where even optimized calls exceed rate limits?
+
+## Clarifications
+
+### Session 2025-10-31
+
+- Q: Cache Storage Mechanism - The spec mentions caching PR data but doesn't specify where/how this cache is stored, which fundamentally affects the implementation architecture. → A: No persistent cache needed - simple in-memory deduplication only (track already-fetched PRs within a single run, discard on exit)
+- Q: Distant Rate Limit Reset Time - What happens when the rate limit reset time is in the distant future (> 1 hour)? → A: Display error message and exit immediately (no partial results, clear error)
+- Q: Partial Results Behavior - What does "complete with partial results" mean when rate limit reset is >5 minutes? → A: Fail fast with error in normal run (no Slack message sent). Show partial results with warning only in dry-run mode (for debugging)
+- Q: Large Team Scalability - How does the system handle very large organizations where even optimized calls exceed rate limits? → A: Document team size limit (e.g., 15 members max) and fail gracefully if exceeded
+- Q: Inconsistent Rate Limit Data - How does the system handle GitHub API returning inconsistent rate limit data? → A: Use most conservative value and log warning (safe, maintains availability)
+- Q: Intermittent Network Connectivity During Retries - How does the system behave when network connectivity is intermittent during retry attempts? → A: Fail immediately on network errors (no retry, strict fast-fail)
 
 ## Requirements *(mandatory)*
 
@@ -75,26 +82,28 @@ The application minimizes GitHub API quota usage by eliminating redundant API ca
 - **FR-001**: System MUST check GitHub API rate limit status before initiating any PR search operations
 - **FR-002**: System MUST display clear warning messages to users when remaining rate limit quota is below 100 requests
 - **FR-003**: System MUST detect rate limit exhaustion (HTTP 429 responses or zero remaining quota) during API operations
-- **FR-004**: System MUST wait and automatically retry when rate limit resets within 5 minutes
-- **FR-005**: System MUST complete with partial results and clear messaging when rate limit resets beyond 5 minutes
-- **FR-006**: System MUST implement exponential backoff retry logic for failed GitHub API calls with intervals of 1s, 2s, 4s
-- **FR-007**: System MUST respect GitHub's `Retry-After` header when present in rate limit responses
-- **FR-008**: System MUST limit retry attempts to 3 per API call to prevent infinite loops
-- **FR-009**: System MUST log detailed error information when retries are exhausted, including rate limit status and error messages
-- **FR-010**: System MUST cache fetched PR data with timestamps to enable cache-based optimization
-- **FR-011**: System MUST invalidate and ignore cached data older than 5 minutes
-- **FR-012**: System MUST reuse in-memory PR data within a single run to avoid redundant fetches
-- **FR-013**: System MUST log total API call count and optimization metrics at the end of each run
-- **FR-014**: System MUST provide configuration options for retry behavior (max attempts, backoff multiplier, timeout threshold)
-- **FR-015**: System MUST gracefully handle cache read/write errors without affecting core functionality
-- **FR-016**: System MUST distinguish between rate limit errors, network errors, and other API failures for appropriate handling
+- **FR-004**: System MUST handle inconsistent rate limit data by using the most conservative value (lowest remaining quota, earliest reset time) and logging a warning
+- **FR-005**: System MUST wait and automatically retry when rate limit resets within 5 minutes
+- **FR-006**: System MUST fail fast and exit with error (no Slack message) when rate limit resets beyond 5 minutes in normal mode
+- **FR-007**: System MUST display partial results with warning when rate limit resets beyond 5 minutes in dry-run mode only
+- **FR-008**: System MUST implement exponential backoff retry logic for rate limit errors (HTTP 429) with intervals of 1s, 2s, 4s
+- **FR-009**: System MUST respect GitHub's `Retry-After` header when present in rate limit responses
+- **FR-010**: System MUST limit retry attempts to 3 per rate limit error to prevent infinite loops
+- **FR-011**: System MUST log detailed error information when retries are exhausted, including rate limit status and error messages
+- **FR-012**: System MUST fail immediately without retry when encountering network errors (timeout, connection refused, DNS failure, etc.)
+- **FR-013**: System MUST track fetched PR URLs in memory during a single run to enable deduplication
+- **FR-014**: System MUST reuse in-memory PR data within a single run to avoid redundant fetches when the same PR appears multiple times
+- **FR-015**: System MUST log total API call count and optimization metrics at the end of each run
+- **FR-016**: System MUST provide configuration options for retry behavior (max attempts, backoff multiplier, timeout threshold) for rate limit errors only
+- **FR-017**: System MUST validate team size at startup and fail with clear error message if team members exceed 15 (recommended maximum for rate limit compliance)
+- **FR-018**: System MUST distinguish between rate limit errors (retryable with backoff), network errors (fail fast), and other API failures for appropriate handling
 
 ### Key Entities
 
-- **RateLimitStatus**: Represents current GitHub API rate limit state including remaining quota, total limit, reset timestamp, and whether retry is recommended
-- **RetryPolicy**: Configuration for retry behavior including max attempts, backoff intervals, timeout thresholds, and whether to respect Retry-After headers
-- **PRCache**: Temporary storage for fetched PR data with metadata including fetch timestamp, PR details, and cache validity status
-- **APICallMetrics**: Tracking information for API usage including total calls made, calls saved by caching, retry count, and success/failure rates
+- **RateLimitStatus**: Represents current GitHub API rate limit state including remaining quota, total limit, reset timestamp, and whether retry is recommended. Uses conservative values when rate limit data is inconsistent (lowest remaining quota, earliest reset time).
+- **RetryPolicy**: Configuration for retry behavior for rate limit errors only, including max attempts, backoff intervals, timeout thresholds, and whether to respect Retry-After headers. Network errors fail immediately without retry.
+- **PRDeduplicationTracker**: In-memory dictionary mapping PR URLs to fetched PR data within a single run, enabling reuse and preventing redundant API calls
+- **APICallMetrics**: Tracking information for API usage including total calls made, calls saved by deduplication, retry count for rate limit errors, and success/failure rates
 
 ## Success Criteria *(mandatory)*
 
@@ -103,8 +112,9 @@ The application minimizes GitHub API quota usage by eliminating redundant API ca
 - **SC-001**: Application successfully completes PR fetching for a 5-member team without crashing or getting stuck, even when starting with low rate limits (< 200 remaining)
 - **SC-002**: Users see clear status messages about rate limit state, including remaining quota and reset time, at least once during each run
 - **SC-003**: When rate limit is exhausted and resets within 5 minutes, application automatically waits and resumes, completing within 7 minutes total (including wait time)
-- **SC-004**: When rate limit is exhausted and resets beyond 5 minutes, application completes with partial results within 30 seconds and displays the reset time
-- **SC-005**: Transient API failures are automatically recovered through retry logic, with 95%+ success rate for retryable errors in normal network conditions
-- **SC-006**: API call optimization reduces total GitHub API calls by at least 50% for repeated runs within a 5-minute window (measured by comparing first run vs. cached run)
-- **SC-007**: Users can configure retry behavior through environment variables without modifying code
-- **SC-008**: Application logs include clear metrics showing: total API calls, cached data usage, retry attempts, and final rate limit status
+- **SC-004**: When rate limit is exhausted and resets beyond 5 minutes in normal mode, application fails fast and exits with error within 5 seconds without sending Slack message
+- **SC-005**: When rate limit is exhausted and resets beyond 5 minutes in dry-run mode, application displays partial results with warning within 5 seconds showing reset time
+- **SC-006**: Rate limit errors (HTTP 429) are automatically recovered through retry logic, with 95%+ success rate for rate limit errors when reset times are reasonable
+- **SC-007**: API call deduplication reduces total GitHub API calls by at least 30% within a single run when team members share common PRs (measured by comparing actual calls vs. theoretical maximum without deduplication)
+- **SC-008**: Users can configure retry behavior through environment variables without modifying code
+- **SC-009**: Application logs include clear metrics showing: total API calls, calls saved by deduplication, retry attempts, and final rate limit status
