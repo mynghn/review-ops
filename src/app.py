@@ -77,7 +77,10 @@ def main() -> int:
             print("=" * 80 + "\n")
 
         # Initialize clients
-        github_client = GitHubClient(token=config.github_token)
+        github_client = GitHubClient(
+            token=config.github_token,
+            gh_search_limit=config.gh_search_limit
+        )
         slack_client = SlackClient(webhook_url=config.slack_webhook_url)
 
         # Fetch PRs involving team members using GitHub Search API

@@ -20,16 +20,29 @@ Stale PR detection and Slack notification tool for GitHub organizations.
 
 - Python 3.12 or higher
 - [uv](https://github.com/astral-sh/uv) package manager
+- [GitHub CLI (gh)](https://cli.github.com/) - **Required** for efficient PR searching and review status fetching
 
 ### Setup
 
-1. Clone the repository:
+1. Install GitHub CLI if not already installed:
+```bash
+# macOS
+brew install gh
+
+# Linux
+# See https://github.com/cli/cli/blob/trunk/docs/install_linux.md
+
+# Windows
+# See https://github.com/cli/cli#installation
+```
+
+2. Clone the repository:
 ```bash
 git clone https://github.com/your-org/review-ops.git
 cd review-ops
 ```
 
-2. Install dependencies:
+3. Install dependencies:
 ```bash
 uv sync
 ```
@@ -55,6 +68,7 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
 # Optional
 LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 API_TIMEOUT=30  # API request timeout in seconds
+GH_SEARCH_LIMIT=1000  # Maximum PRs to fetch per search query (default: 1000)
 ```
 
 #### Getting a GitHub Token
@@ -251,6 +265,43 @@ The tool automatically detects required approval counts from branch protection r
 - If protection rules exist: Uses `required_approving_review_count`
 - If no protection: Defaults to requiring 1 approval
 
+## Performance
+
+### API Call Optimization
+
+The tool is designed for efficient GitHub API usage using a hybrid approach:
+
+**Search Phase** (via GitHub CLI):
+- For each team member, runs 2 searches: `--author` and `--review-requested`
+- Uses `gh search prs` which is much faster than iterating through all repos
+- Collects all PR references first, then deduplicates before fetching details
+
+**Detail Fetching Phase** (via GitHub CLI):
+- Fetches complete PR details (reviews, approvals, status) for each unique PR
+- Uses `gh pr view --json` which combines multiple REST API calls into one
+
+### Typical API Usage
+
+For a team of **5 members** with **20 unique PRs**:
+- **Search calls**: 10 (2 per member: author + review-requested)
+- **Detail calls**: 20 (1 per unique PR)
+- **Total API calls**: ~30
+
+The tool automatically deduplicates PRs found in multiple searches, so you're never fetching the same PR details twice.
+
+### Rate Limits
+
+- **GitHub API**: 5,000 requests/hour for authenticated users
+- **gh CLI**: Respects GitHub's rate limits automatically
+- **Estimated capacity**: Can handle organizations with 100+ team members and 500+ PRs per run
+
+### Configuration
+
+Adjust `GH_SEARCH_LIMIT` in your `.env` file if your organization has very large numbers of PRs:
+```env
+GH_SEARCH_LIMIT=2000  # Increase if you have >1000 PRs per search
+```
+
 ## Troubleshooting
 
 ### "GITHUB_TOKEN is required"
@@ -288,7 +339,8 @@ MIT License - see LICENSE file for details.
 ## Acknowledgments
 
 Built with:
-- [PyGithub](https://github.com/PyGithub/PyGithub) - GitHub API client
+- [GitHub CLI (gh)](https://cli.github.com/) - Primary tool for efficient PR searching and fetching
+- [PyGithub](https://github.com/PyGithub/PyGithub) - GitHub API authentication
 - [requests](https://requests.readthedocs.io/) - HTTP library for Slack webhooks
 - [python-dotenv](https://github.com/theskumar/python-dotenv) - Environment variable management
 - [pytest](https://pytest.org/) - Testing framework

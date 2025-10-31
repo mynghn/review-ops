@@ -82,6 +82,16 @@ def load_config() -> Config:
         msg = f"Invalid API_TIMEOUT '{api_timeout_str}'. Must be a positive integer."
         raise ValueError(msg) from e
 
+    gh_search_limit_str = os.getenv("GH_SEARCH_LIMIT", "1000")
+    try:
+        gh_search_limit = int(gh_search_limit_str)
+        if gh_search_limit <= 0:
+            msg = "GH_SEARCH_LIMIT must be a positive integer"
+            raise ValueError(msg)
+    except ValueError as e:
+        msg = f"Invalid GH_SEARCH_LIMIT '{gh_search_limit_str}'. Must be a positive integer."
+        raise ValueError(msg) from e
+
     # Check for gh CLI availability
     _check_gh_cli_available()
 
@@ -91,22 +101,40 @@ def load_config() -> Config:
         slack_webhook_url=slack_webhook_url,
         log_level=log_level,
         api_timeout=api_timeout,
+        gh_search_limit=gh_search_limit,
     )
 
 
 def _check_gh_cli_available() -> None:
     """
-    Check if gh CLI is available and warn if not found.
+    Check if gh CLI is available and raise error if not found.
 
-    The application will fall back gracefully if gh CLI is unavailable,
-    but review decision accuracy may be reduced.
+    The application requires gh CLI for efficient PR searching and fetching.
+    Without it, the application cannot function properly.
+
+    Raises:
+        ValueError: If gh CLI is not installed
     """
     if not shutil.which("gh"):
-        logger = logging.getLogger(__name__)
-        logger.warning(
-            "gh CLI not found. Install with 'brew install gh' (macOS) or see https://cli.github.com/. "
-            "Application will continue but review decision accuracy may be reduced."
+        import platform
+
+        system = platform.system()
+        install_cmd = {
+            "Darwin": "brew install gh",
+            "Linux": "See https://github.com/cli/cli/blob/trunk/docs/install_linux.md",
+            "Windows": "See https://github.com/cli/cli#installation or use: winget install GitHub.cli"
+        }.get(system, "See https://cli.github.com/")
+
+        msg = (
+            "GitHub CLI (gh) is not installed, which is required for this application.\n\n"
+            f"Installation for {system}:\n"
+            f"  {install_cmd}\n\n"
+            "After installing, authenticate with:\n"
+            "  gh auth login\n\n"
+            "Or set your token:\n"
+            "  gh auth login --with-token < your-token-file"
         )
+        raise ValueError(msg)
 
 
 def load_team_members(file_path: str = "team_members.json") -> list[TeamMember]:

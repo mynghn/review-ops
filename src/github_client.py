@@ -3,66 +3,121 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
+from datetime import datetime
 
-from github import Auth, Github, GithubException, Repository
-from github.PullRequest import PullRequest as GithubPR
+from github import Auth, Github
 
 from models import PullRequest
 
+logger = logging.getLogger(__name__)
+
 
 class GitHubClient:
-    """Client for interacting with GitHub API."""
+    """
+    Client for interacting with GitHub API using a hybrid approach.
 
-    def __init__(self, token: str) -> None:
+    This client uses GitHub CLI (gh) for efficient PR searching and detail fetching,
+    while PyGithub provides authentication infrastructure. This hybrid approach offers:
+
+    - Faster searches: gh CLI's search is optimized for large organizations
+    - Fewer API calls: gh CLI batches multiple REST API calls into single commands
+    - Better performance: Reduced round-trip time compared to individual REST calls
+    - Rate limit efficiency: Each gh CLI command counts as fewer individual API calls
+
+    The client requires 'gh' CLI to be installed and authenticated with the same token.
+    """
+
+    def __init__(self, token: str, gh_search_limit: int = 1000) -> None:
         """
         Initialize GitHub client with authentication token.
 
         Args:
             token: GitHub Personal Access Token with 'repo' and 'read:org' scopes
+            gh_search_limit: Maximum number of PRs to return from each gh search query (default: 1000)
         """
         auth = Auth.Token(token)
         self.client = Github(auth=auth)
+        self.gh_search_limit = gh_search_limit
 
-    def fetch_organization_repos(self, org_name: str) -> list[Repository.Repository]:
+    def check_rate_limit(self) -> None:
         """
-        Fetch all repositories for a GitHub organization.
+        Check GitHub API rate limit and log warning if quota is low.
 
-        Args:
-            org_name: Name of the GitHub organization
+        Uses gh API to check remaining rate limit. Logs a warning if fewer than
+        500 requests remain, as PR fetching can consume many API calls for large teams.
 
-        Returns:
-            List of Repository objects
-
-        Raises:
-            GithubException: If organization not found or access denied
+        This is a best-effort check and will not fail if gh CLI is unavailable.
         """
-        org = self.client.get_organization(org_name)
-        return list(org.get_repos(type="all"))
+        try:
+            result = subprocess.run(
+                ["gh", "api", "rate_limit", "--jq", ".resources.core"],
+                capture_output=True,
+                text=True,
+                check=True,
+                env=os.environ,
+                timeout=10,
+            )
+
+            rate_data = json.loads(result.stdout)
+            remaining = rate_data.get("remaining", 0)
+            limit = rate_data.get("limit", 5000)
+            reset_timestamp = rate_data.get("reset", 0)
+
+            logger.debug(f"GitHub API rate limit: {remaining}/{limit} remaining")
+
+            if remaining < 500:
+                reset_time = datetime.fromtimestamp(reset_timestamp)
+                logger.warning(
+                    f"⚠️  GitHub API rate limit is low: {remaining}/{limit} requests remaining. "
+                    f"Resets at {reset_time.strftime('%Y-%m-%d %H:%M:%S')}. "
+                    f"Consider running later or reducing GH_SEARCH_LIMIT."
+                )
+            elif remaining < 1000:
+                logger.info(f"GitHub API rate limit: {remaining}/{limit} requests remaining")
+
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, json.JSONDecodeError, KeyError) as e:
+            # Non-fatal: Log debug message and continue
+            logger.debug(f"Could not check rate limit (gh CLI may be unavailable): {e}")
 
     def fetch_team_prs(self, org_name: str, team_usernames: set[str]) -> list[PullRequest]:
         """
-        Fetch open PRs involving team members using gh CLI search.
+        Fetch open PRs involving team members using a two-phase approach.
 
-        This is much more efficient than iterating through all organization repos.
-        Searches for PRs where team members are authors or requested reviewers.
+        Phase 1 - Search & Deduplicate:
+        - Searches for PRs where team members are authors or requested reviewers
+        - Collects all PR keys (repo, number) across all searches
+        - Automatically deduplicates using a set to avoid redundant fetches
 
-        Note: reviewed-by is omitted as it's less relevant for staleness tracking.
+        Phase 2 - Fetch Details:
+        - Fetches complete details only for unique PRs
+        - Each gh pr view call includes reviews, approvals, and status
+
+        This two-phase approach is much more efficient than:
+        - Iterating through all organization repos (slow for large orgs)
+        - Fetching details before deduplication (wastes API calls)
+
+        Note: 'reviewed-by' search is omitted as it's less relevant for staleness
+        tracking and would add significant API overhead.
 
         Args:
             org_name: Name of the GitHub organization
             team_usernames: Set of GitHub usernames to search for
 
         Returns:
-            List of PullRequest objects involving team members
-        """
-        import logging
-        from datetime import datetime
-        logger = logging.getLogger(__name__)
+            List of PullRequest objects involving team members (drafts excluded)
 
-        all_prs = []
-        seen_pr_keys = set()  # Deduplicate by (repo, number)
+        Raises:
+            subprocess.CalledProcessError: If gh CLI command fails
+            json.JSONDecodeError: If gh CLI output is malformed
+        """
+        # Check rate limit before making API calls
+        self.check_rate_limit()
+
+        # Phase 1: Collect all PR keys from searches (no detail fetching yet)
+        pr_keys = set()  # Use set for automatic deduplication
 
         # Search types: author and review-requested
         # Note: Using flags instead of query strings for better reliability
@@ -84,7 +139,7 @@ class GitHubClient:
                             "--owner", org_name,
                             flag, username,
                             "--state", "open",
-                            "--limit", "1000",
+                            "--limit", str(self.gh_search_limit),
                             "--json", "number,url,repository"
                         ],
                         capture_output=True,
@@ -96,31 +151,38 @@ class GitHubClient:
                     prs_data = json.loads(result.stdout)
                     logger.debug(f"    Found {len(prs_data)} PRs for {username} ({search_type_name})")
 
+                    # Collect PR keys (automatic deduplication via set)
                     for pr_data in prs_data:
                         repo_full_name = pr_data["repository"]["nameWithOwner"]
                         pr_number = pr_data["number"]
-                        pr_key = (repo_full_name, pr_number)
-
-                        # Skip if we've already processed this PR
-                        if pr_key in seen_pr_keys:
-                            continue
-                        seen_pr_keys.add(pr_key)
-
-                        # Fetch full PR details using gh pr view
-                        # This replaces multiple PyGithub API calls with a single gh CLI call
-                        pr_details = self._fetch_pr_details(repo_full_name, pr_number)
-
-                        if pr_details:
-                            all_prs.append(pr_details)
+                        pr_keys.add((repo_full_name, pr_number))
 
                 except subprocess.CalledProcessError as e:
-                    logger.error(f"gh search prs failed for {username} ({search_type_name}): {e.stderr}")
-                    raise
+                    error_msg = (
+                        f"gh search prs failed for {username} ({search_type_name}): {e.stderr}\n"
+                        "Possible causes:\n"
+                        "  - gh CLI not authenticated (run: gh auth login)\n"
+                        "  - Invalid GitHub token (check GH_TOKEN in .env)\n"
+                        "  - Network connectivity issues\n"
+                        "  - GitHub API is down (check https://www.githubstatus.com/)"
+                    )
+                    logger.error(error_msg)
+                    raise ValueError(error_msg) from e
                 except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse gh CLI output: {e}")
-                    raise
+                    error_msg = f"Failed to parse gh CLI output for {username} ({search_type_name}): {e}"
+                    logger.error(error_msg)
+                    raise ValueError(error_msg) from e
 
-        logger.info(f"Total unique PRs found: {len(all_prs)}")
+        logger.info(f"Found {len(pr_keys)} unique PR(s) across all searches")
+
+        # Phase 2: Fetch details for each unique PR
+        all_prs = []
+        for repo_full_name, pr_number in pr_keys:
+            pr_details = self._fetch_pr_details(repo_full_name, pr_number)
+            if pr_details:
+                all_prs.append(pr_details)
+
+        logger.info(f"Successfully fetched details for {len(all_prs)} PR(s)")
         return all_prs
 
     def _fetch_pr_details(self, repo_full_name: str, pr_number: int) -> PullRequest | None:
@@ -137,10 +199,6 @@ class GitHubClient:
         Returns:
             PullRequest object or None if PR is a draft or fetch fails
         """
-        import logging
-        from datetime import datetime
-        logger = logging.getLogger(__name__)
-
         try:
             result = subprocess.run(
                 [
@@ -211,116 +269,3 @@ class GitHubClient:
         except (json.JSONDecodeError, KeyError) as e:
             logger.error(f"Failed to parse gh pr view output for {repo_full_name}#{pr_number}: {e}")
             return None
-
-    def fetch_open_prs(self, repo: Repository.Repository) -> list[PullRequest]:
-        """
-        Fetch all open pull requests from a repository, excluding drafts.
-
-        Args:
-            repo: Repository object to fetch PRs from
-
-        Returns:
-            List of PullRequest objects (drafts excluded)
-        """
-        github_prs = repo.get_pulls(state="open", sort="created")
-        pull_requests = []
-
-        for github_pr in github_prs:
-            # Skip draft PRs
-            if github_pr.draft:
-                continue
-
-            # Get review status from gh CLI
-            repo_full_name = repo.full_name
-            review_status = self.get_review_status(repo_full_name, github_pr.number)
-
-            # Count current approvals (still useful for display)
-            current_approvals = self.count_current_approvals(github_pr)
-
-            # Extract reviewer usernames
-            reviewers = [reviewer.login for reviewer in github_pr.requested_reviewers]
-
-            # Determine ready_at time (for MVP, use created_at since we can't easily get ready time)
-            ready_at = github_pr.created_at if not github_pr.draft else None
-
-            pr = PullRequest(
-                repo_name=repo.name,
-                number=github_pr.number,
-                title=github_pr.title,
-                author=github_pr.user.login,
-                reviewers=reviewers,
-                url=github_pr.html_url,
-                created_at=github_pr.created_at,
-                ready_at=ready_at,
-                current_approvals=current_approvals,
-                review_status=review_status,
-                base_branch=github_pr.base.ref,
-            )
-            pull_requests.append(pr)
-
-        return pull_requests
-
-    def get_review_status(self, repo_full_name: str, pr_number: int) -> str | None:
-        """
-        Get PR review status using gh CLI.
-
-        The review status reflects GitHub's computed review state based on
-        branch protection rules, including required approvals, CODEOWNERS, and
-        required reviewers.
-
-        Args:
-            repo_full_name: Full repository name (e.g., 'owner/repo')
-            pr_number: PR number
-
-        Returns:
-            One of: 'APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED', or None
-            None indicates no review requirements configured or gh CLI unavailable
-        """
-        try:
-            result = subprocess.run(
-                ["gh", "pr", "view", str(pr_number),
-                 "--repo", repo_full_name,
-                 "--json", "reviewDecision"],
-                capture_output=True,
-                text=True,
-                check=True,
-                env=os.environ,
-            )
-            data = json.loads(result.stdout)
-            return data.get("reviewDecision") or None
-        except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as e:
-            # Fall back gracefully if gh CLI unavailable or fails
-            return None
-
-    def count_current_approvals(self, pr: GithubPR) -> int:
-        """
-        Count the number of current valid approvals for a PR.
-
-        Only the latest review from each user is considered.
-        Only reviews with state='APPROVED' count as approvals.
-
-        Args:
-            pr: GitHub PullRequest object
-
-        Returns:
-            Number of current valid approvals
-        """
-        reviews = pr.get_reviews()
-
-        # Track latest review per user
-        latest_reviews: dict[str, object] = {}
-
-        for review in reviews:
-            user = review.user.login
-            if (
-                user not in latest_reviews
-                or review.submitted_at > latest_reviews[user].submitted_at
-            ):
-                latest_reviews[user] = review
-
-        # Count approvals from latest reviews
-        approval_count = sum(
-            1 for review in latest_reviews.values() if review.state == "APPROVED"
-        )
-
-        return approval_count

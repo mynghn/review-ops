@@ -144,3 +144,6 @@ class Config:
 
     api_timeout: int = 30
     """API request timeout in seconds"""
+
+    gh_search_limit: int = 1000
+    """Maximum number of PRs to return from each gh search query"""

@@ -17,14 +17,17 @@ class TestLoadConfig:
 
     def test_load_config_success(self):
         """Test successful config loading with all required variables."""
-        with patch.dict(
-            os.environ,
-            {
-                "GITHUB_TOKEN": "ghp_test123",
-                "GITHUB_ORG": "test-org",
-                "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
-            },
-            clear=True,
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                },
+                clear=True,
+            ),
         ):
             config = load_config()
             assert config.github_token == "ghp_test123"
@@ -32,28 +35,35 @@ class TestLoadConfig:
             assert config.slack_webhook_url == "https://hooks.slack.com/services/T00/B00/XXX"
             assert config.log_level == "INFO"  # Default
             assert config.api_timeout == 30  # Default
+            assert config.gh_search_limit == 1000  # Default
 
     def test_load_config_with_optional_vars(self):
         """Test config loading with optional variables set."""
-        with patch.dict(
-            os.environ,
-            {
-                "GITHUB_TOKEN": "ghp_test123",
-                "GITHUB_ORG": "test-org",
-                "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
-                "LOG_LEVEL": "DEBUG",
-                "API_TIMEOUT": "60",
-            },
-            clear=True,
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "LOG_LEVEL": "DEBUG",
+                    "API_TIMEOUT": "60",
+                    "GH_SEARCH_LIMIT": "2000",
+                },
+                clear=True,
+            ),
         ):
             config = load_config()
             assert config.log_level == "DEBUG"
             assert config.api_timeout == 60
+            assert config.gh_search_limit == 2000
 
     def test_load_config_missing_github_token(self):
-        """Test error when GITHUB_TOKEN is missing."""
+        """Test error when GH_TOKEN is missing."""
         with (
             patch("config.load_dotenv"),
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
             patch.dict(
                 os.environ,
                 {
@@ -62,7 +72,7 @@ class TestLoadConfig:
                 },
                 clear=True,
             ),
-            pytest.raises(ValueError, match="GITHUB_TOKEN is required"),
+            pytest.raises(ValueError, match="GH_TOKEN is required"),
         ):
             load_config()
 
@@ -70,10 +80,11 @@ class TestLoadConfig:
         """Test error when GITHUB_ORG is missing."""
         with (
             patch("config.load_dotenv"),
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
             patch.dict(
                 os.environ,
                 {
-                    "GITHUB_TOKEN": "ghp_test123",
+                    "GH_TOKEN": "ghp_test123",
                     "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
                 },
                 clear=True,
@@ -86,10 +97,11 @@ class TestLoadConfig:
         """Test error when SLACK_WEBHOOK_URL is missing."""
         with (
             patch("config.load_dotenv"),
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
             patch.dict(
                 os.environ,
                 {
-                    "GITHUB_TOKEN": "ghp_test123",
+                    "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
                 },
                 clear=True,
@@ -100,57 +112,73 @@ class TestLoadConfig:
 
     def test_load_config_invalid_slack_webhook(self):
         """Test error when SLACK_WEBHOOK_URL format is invalid."""
-        with patch.dict(
-            os.environ,
-            {
-                "GITHUB_TOKEN": "ghp_test123",
-                "GITHUB_ORG": "test-org",
-                "SLACK_WEBHOOK_URL": "https://invalid.com/webhook",
-            },
-            clear=True,
-        ), pytest.raises(ValueError, match="must be a valid Slack webhook URL"):
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://invalid.com/webhook",
+                },
+                clear=True,
+            ),
+            pytest.raises(ValueError, match="must be a valid Slack webhook URL"),
+        ):
             load_config()
 
     def test_load_config_invalid_log_level(self):
         """Test error when LOG_LEVEL is invalid."""
-        with patch.dict(
-            os.environ,
-            {
-                "GITHUB_TOKEN": "ghp_test123",
-                "GITHUB_ORG": "test-org",
-                "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
-                "LOG_LEVEL": "INVALID",
-            },
-            clear=True,
-        ), pytest.raises(ValueError, match="Invalid LOG_LEVEL"):
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "LOG_LEVEL": "INVALID",
+                },
+                clear=True,
+            ),
+            pytest.raises(ValueError, match="Invalid LOG_LEVEL"),
+        ):
             load_config()
 
     def test_load_config_invalid_api_timeout(self):
         """Test error when API_TIMEOUT is not a valid integer."""
-        with patch.dict(
-            os.environ,
-            {
-                "GITHUB_TOKEN": "ghp_test123",
-                "GITHUB_ORG": "test-org",
-                "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
-                "API_TIMEOUT": "invalid",
-            },
-            clear=True,
-        ), pytest.raises(ValueError, match="Invalid API_TIMEOUT"):
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "API_TIMEOUT": "invalid",
+                },
+                clear=True,
+            ),
+            pytest.raises(ValueError, match="Invalid API_TIMEOUT"),
+        ):
             load_config()
 
     def test_load_config_negative_api_timeout(self):
         """Test error when API_TIMEOUT is negative."""
-        with patch.dict(
-            os.environ,
-            {
-                "GITHUB_TOKEN": "ghp_test123",
-                "GITHUB_ORG": "test-org",
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
                 "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
                 "API_TIMEOUT": "-10",
             },
             clear=True,
-        ), pytest.raises(ValueError, match="Must be a positive integer"):
+            ),
+            pytest.raises(ValueError, match="Must be a positive integer"),
+        ):
             load_config()
 
 
