@@ -1,0 +1,16 @@
+[
+  {
+    "user": {
+      "login": "bob"
+    },
+    "state": "APPROVED",
+    "submitted_at": "2025-10-26T14:30:00Z"
+  },
+  {
+    "user": {
+      "login": "charlie-dev"
+    },
+    "state": "CHANGES_REQUESTED",
+    "submitted_at": "2025-10-26T15:00:00Z"
+  }
+]

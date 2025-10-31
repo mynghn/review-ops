@@ -1,0 +1,13 @@
+[
+  {
+    "github_username": "alice",
+    "slack_id": "U01234ABCDE"
+  },
+  {
+    "github_username": "bob",
+    "slack_id": "U56789FGHIJ"
+  },
+  {
+    "github_username": "charlie"
+  }
+]
