@@ -69,3 +69,6 @@ dmypy.json
 # uv
 .uv/
 uv.lock
+
+# Claude local settings
+.claude/settings.local.json
