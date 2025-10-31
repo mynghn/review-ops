@@ -365,9 +365,39 @@ With multiple developers:
 
 ---
 
+## Phase 8: Bug Fix - PR Filtering (Post-Production)
+
+**Purpose**: Fix issue where irrelevant PRs (not authored by or review-requested to team members) are included in results
+
+**Completed**: 2025-10-31
+
+- [X] BUG001 Fix PR filtering logic in src/github_client.py to validate current team involvement (lines 183-197)
+- [X] BUG002 Add team member validation after fetching PR details to ensure author or current reviewer is a team member
+- [X] BUG003 Add comprehensive test coverage for PR filtering validation in tests/integration/test_github_client.py
+- [X] BUG004 Add test case for PRs where team member was removed as reviewer (should be excluded)
+- [X] BUG005 Add test case for PRs authored by team members (should be included)
+- [X] BUG006 Add test case for PRs with current team reviewers (should be included)
+- [X] BUG007 Add test case for fully external PRs (should be excluded)
+- [X] BUG008 Add test case for PRs with mixed team/external reviewers (should be included)
+- [X] BUG009 Run all tests to verify fix works correctly (6 tests passing)
+
+**Root Cause**: GitHub search API returns PRs based on historical involvement (e.g., when a team member was previously requested as a reviewer but later removed). The code was not validating that team members are still involved in the PR based on current state.
+
+**Fix**: Added validation in `fetch_team_prs()` method (src/github_client.py:183-197) to filter PRs after fetching details, ensuring at least one team member is currently the author OR a current reviewer.
+
+**Impact**:
+- **Bug eliminated**: Only PRs with current team involvement are now included
+- **FR-008 compliance**: Properly implements requirement to filter PRs by team member involvement
+- **Test coverage**: Added 5 new integration tests to prevent regression
+- **No breaking changes**: Slack message generation already correctly handled team mentions
+
+**Checkpoint**: PR filtering now correctly excludes irrelevant PRs based on current state
+
+---
+
 ## Notes
 
-- **Total tasks**: 137 tasks (including refactoring)
+- **Total tasks**: 146 tasks (including refactoring and bug fixes)
 - **Task breakdown by phase**:
   - Phase 1 (Setup): 12 tasks
   - Phase 2 (Foundational): 13 tasks
@@ -376,6 +406,7 @@ With multiple developers:
   - Phase 5 (US3): 18 tasks (6 tests + 12 implementation)
   - Phase 6 (Polish): 11 tasks
   - Phase 7 (Refactoring): 24 tasks (completed)
+  - Phase 8 (Bug Fix): 9 tasks (completed)
 - **Parallel opportunities**: ~60 tasks marked [P] can run in parallel within their phase
 - **MVP scope**: Phases 1-3 = 69 tasks (50% of total) delivers full core value
 - [P] tasks = different files, no dependencies

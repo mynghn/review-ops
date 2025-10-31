@@ -180,7 +180,21 @@ class GitHubClient:
         for repo_full_name, pr_number in pr_keys:
             pr_details = self._fetch_pr_details(repo_full_name, pr_number)
             if pr_details:
-                all_prs.append(pr_details)
+                # FR-008: Validate that PR still involves at least one team member
+                # (author is team member OR any current reviewer is team member)
+                is_team_pr = (
+                    pr_details.author in team_usernames or
+                    any(reviewer in team_usernames for reviewer in pr_details.reviewers)
+                )
+
+                if is_team_pr:
+                    all_prs.append(pr_details)
+                else:
+                    logger.debug(
+                        f"  Skipping PR {repo_full_name}#{pr_number}: "
+                        f"no current team involvement "
+                        f"(author={pr_details.author}, reviewers={pr_details.reviewers})"
+                    )
 
         logger.info(f"Successfully fetched details for {len(all_prs)} PR(s)")
         return all_prs
