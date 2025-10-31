@@ -105,7 +105,7 @@
 
 - [ ] T030 [P] [US1] Write integration test for post_stale_pr_summary with mocked webhook success in tests/integration/test_slack_integration.py
 - [ ] T031 [P] [US1] Write integration test for post_stale_pr_summary with mocked webhook failure in tests/integration/test_slack_integration.py
-- [ ] T031a [P] [US1] Write integration test verifying webhook URL, request headers, and POST method remain unchanged from current implementation in tests/integration/test_slack_integration.py
+- [x] T031a [P] [US1] Write integration test verifying webhook URL, request headers, and POST method remain unchanged from current implementation in tests/integration/test_slack_integration.py
 - [ ] T032 [P] [US1] Write integration test for full message assembly validating Block Kit JSON structure in tests/integration/test_slack_integration.py
 
 ### Implementation for User Story 1
@@ -131,7 +131,7 @@
 
 - [ ] T039 [US1] Implement _build_category_blocks(category, prs) respecting total PR limit across all categories in src/slack_client.py
 - [ ] T040 [US1] Implement _build_blocks(categorized_prs) to assemble all category blocks with dividers in src/slack_client.py
-- [ ] T040a [US1] Implement empty state handling in _build_blocks() that returns engaging "all clear" Block Kit message (header + section with positive emoji) when all categories are empty in src/slack_client.py
+- [x] T040a [US1] Implement empty state handling in _build_blocks() that returns engaging "all clear" Block Kit message (header + section with positive emoji) when all categories are empty in src/slack_client.py
 
 #### Public API
 
@@ -162,8 +162,8 @@
 - [ ] T047 [P] [US2] Write test verifying Korean age format uses Arabic numerals with "일 묵음" in tests/unit/test_slack_client.py
 - [ ] T048 [P] [US2] Write test verifying Korean review count format uses "리뷰 X개 대기중" in tests/unit/test_slack_client.py
 - [ ] T049 [P] [US2] Write test verifying Korean truncation warning uses "개 더 있음" format in tests/unit/test_slack_client.py
-- [ ] T050 [P] [US2] Write test verifying UTF-8 encoding preserves Korean characters without corruption in tests/unit/test_slack_client.py
-- [ ] T051 [P] [US2] Write integration test for full Korean message with mixed Korean and English content in tests/integration/test_slack_integration.py
+- [x] T050 [P] [US2] Write test verifying UTF-8 encoding preserves Korean characters without corruption in tests/unit/test_slack_client.py
+- [x] T051 [P] [US2] Write integration test for full Korean message with mixed Korean and English content in tests/integration/test_slack_integration.py
 
 ### Implementation for User Story 2
 
@@ -194,8 +194,8 @@
 
 ### Implementation for User Story 3
 
-- [ ] T061 [US3] Add LANGUAGE configuration documentation to .env.example
-- [ ] T062 [US3] Document language configuration in README.md with examples
+- [x] T061 [US3] Add LANGUAGE configuration documentation to .env.example
+- [x] T062 [US3] Document language configuration in README.md with examples
 - [ ] T063 [US3] Test LANGUAGE environment variable switching between en and ko
 - [ ] T064 [US3] Verify invalid language codes log warning and default to English
 

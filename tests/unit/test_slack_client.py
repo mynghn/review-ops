@@ -215,6 +215,60 @@ class TestBuildPRSection:
         text = block["text"]["text"]
         assert "Fix &lt;script&gt; &amp; XSS" in text
 
+    def test_pr_section_utf8_encoding_korean(self, slack_client_ko, sample_team):
+        """Test that Korean characters are preserved correctly (UTF-8 encoding)."""
+        pr = PullRequest(
+            repo_name="review-ops",
+            number=789,
+            title="버그 수정: 인증 문제 해결",  # Korean: "Bug fix: Resolve auth issue"
+            author="김철수",  # Korean name: "Kim Cheolsu"
+            reviewers=["박영희", "이민수"],  # Korean names
+            url="https://github.com/test-org/review-ops/pull/789",
+            created_at=datetime(2025, 10, 20, 10, 0, 0, tzinfo=UTC),
+            ready_at=datetime(2025, 10, 20, 10, 0, 0, tzinfo=UTC),
+            current_approvals=0,
+            review_status="REVIEW_REQUIRED",
+            base_branch="main",
+        )
+        stale_pr = StalePR(pr=pr, staleness_days=7.0)
+
+        block = slack_client_ko._build_pr_section(stale_pr, sample_team)
+        text = block["text"]["text"]
+
+        # Verify Korean characters are preserved without corruption
+        assert "버그 수정: 인증 문제 해결" in text
+        assert "@김철수" in text
+        assert "7일 묵음" in text
+        assert "리뷰 2개 대기중" in text
+
+        # Ensure no encoding corruption (no question marks, no garbled text)
+        assert "?" not in text or "?" in pr.title  # Only if originally in title
+
+    def test_pr_section_utf8_mixed_korean_english(self, slack_client_ko, sample_team):
+        """Test that mixed Korean and English content is handled correctly."""
+        pr = PullRequest(
+            repo_name="review-ops",
+            number=999,
+            title="Fix API 버그 in authentication flow",  # Mixed Korean/English
+            author="johndoe",
+            reviewers=["alice"],
+            url="https://github.com/test-org/review-ops/pull/999",
+            created_at=datetime(2025, 10, 20, 10, 0, 0, tzinfo=UTC),
+            ready_at=datetime(2025, 10, 20, 10, 0, 0, tzinfo=UTC),
+            current_approvals=0,
+            review_status="REVIEW_REQUIRED",
+            base_branch="main",
+        )
+        stale_pr = StalePR(pr=pr, staleness_days=3.0)
+
+        block = slack_client_ko._build_pr_section(stale_pr, sample_team)
+        text = block["text"]["text"]
+
+        # Verify mixed content is preserved correctly
+        assert "Fix API 버그 in authentication flow" in text
+        assert "3일 묵음" in text  # Korean age format
+        assert "리뷰 1개 대기중" in text  # Korean review count
+
 
 class TestBuildTruncationWarning:
     """Tests for _build_truncation_warning method."""
@@ -251,11 +305,31 @@ class TestBuildTruncationWarning:
 class TestBuildBlocks:
     """Tests for build_blocks method."""
 
-    def test_build_blocks_empty_categories(self, slack_client_en, sample_team):
-        """Test building blocks with empty categories."""
+    def test_build_blocks_empty_categories_en(self, slack_client_en, sample_team):
+        """Test building blocks with empty categories returns 'all clear' message in English."""
         by_category = {"rotten": [], "aging": [], "fresh": []}
         blocks = slack_client_en.build_blocks(by_category, sample_team)
-        assert blocks == []
+
+        # Should return "all clear" message with header + section
+        assert len(blocks) == 2
+        assert blocks[0]["type"] == "header"
+        assert blocks[0]["text"]["text"] == "🎉 All Clear!"
+        assert blocks[1]["type"] == "section"
+        assert "Great news!" in blocks[1]["text"]["text"]
+        assert "No stale PRs found" in blocks[1]["text"]["text"]
+
+    def test_build_blocks_empty_categories_ko(self, slack_client_ko, sample_team):
+        """Test building blocks with empty categories returns 'all clear' message in Korean."""
+        by_category = {"rotten": [], "aging": [], "fresh": []}
+        blocks = slack_client_ko.build_blocks(by_category, sample_team)
+
+        # Should return Korean "all clear" message
+        assert len(blocks) == 2
+        assert blocks[0]["type"] == "header"
+        assert blocks[0]["text"]["text"] == "🎉 모든 PR 리뷰 완료!"
+        assert blocks[1]["type"] == "section"
+        assert "축하합니다!" in blocks[1]["text"]["text"]
+        assert "리뷰 대기 중인 PR이 없습니다" in blocks[1]["text"]["text"]
 
     def test_build_blocks_single_category(self, slack_client_en, sample_stale_pr, sample_team):
         """Test building blocks with single category."""

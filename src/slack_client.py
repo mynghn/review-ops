@@ -247,6 +247,10 @@ class SlackClient:
         if blocks and blocks[-1].get("type") == "divider":
             blocks.pop()
 
+        # If no blocks were created (all categories empty), return "all clear" message
+        if not blocks:
+            blocks = self._build_empty_state_blocks()
+
         return blocks
 
     def _build_category_blocks(
@@ -364,6 +368,31 @@ class SlackClient:
             )
 
         return {"type": "context", "elements": [{"type": "mrkdwn", "text": warning_text}]}
+
+    def _build_empty_state_blocks(self) -> list[dict]:
+        """
+        Create "all clear" Block Kit message when no PRs exist.
+
+        Returns:
+            List of blocks for empty state message
+        """
+        if self.language == "ko":
+            header_text = "🎉 모든 PR 리뷰 완료!"
+            message_text = (
+                "축하합니다! 리뷰 대기 중인 PR이 없습니다. "
+                "팀이 모든 코드 리뷰를 완료했습니다!"
+            )
+        else:
+            header_text = "🎉 All Clear!"
+            message_text = (
+                "Great news! No stale PRs found. "
+                "The team is all caught up on code reviews!"
+            )
+
+        return [
+            {"type": "header", "text": {"type": "plain_text", "text": header_text, "emoji": True}},
+            {"type": "section", "text": {"type": "mrkdwn", "text": message_text}},
+        ]
 
     def _escape_mrkdwn(self, text: str) -> str:
         """
