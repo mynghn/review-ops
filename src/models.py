@@ -147,3 +147,6 @@ class Config:
 
     gh_search_limit: int = 1000
     """Maximum number of PRs to return from each gh search query"""
+
+    language: str = "en"
+    """Language for Slack message formatting ('en' or 'ko')"""

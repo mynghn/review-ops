@@ -10,14 +10,19 @@ from models import StalePR, TeamMember
 class SlackClient:
     """Client for sending messages to Slack via webhooks."""
 
-    def __init__(self, webhook_url: str) -> None:
+    MAX_PRS_PER_CATEGORY = 15
+    """Maximum number of PRs to display per category before truncation"""
+
+    def __init__(self, webhook_url: str, language: str = "en") -> None:
         """
-        Initialize Slack client with webhook URL.
+        Initialize Slack client with webhook URL and language.
 
         Args:
             webhook_url: Slack incoming webhook URL
+            language: Language code for message formatting ('en' or 'ko', default: 'en')
         """
         self.webhook_url = webhook_url
+        self.language = language
 
     def format_message(self, stale_prs: list[StalePR], team_members: list[TeamMember]) -> str:
         """
@@ -98,7 +103,9 @@ class SlackClient:
                 reviewers_str = ", ".join(reviewer_mentions) if reviewer_mentions else "none"
 
                 # Format review status display
-                review_status_display = self._format_review_status(pr.review_status, pr.current_approvals)
+                review_status_display = self._format_review_status(
+                    pr.review_status, pr.current_approvals
+                )
 
                 # Format PR line
                 lines.append(
@@ -114,18 +121,21 @@ class SlackClient:
         Format review status for display.
 
         Args:
-            review_status: GitHub's review status (APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, or None)
+            review_status: GitHub's review status
+                (APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, or None)
             current_approvals: Number of current approvals
 
         Returns:
             Formatted status string with emoji
         """
         if review_status == "APPROVED":
-            return f"✅ Approved ({current_approvals} approval{'s' if current_approvals != 1 else ''})"
+            plural = "s" if current_approvals != 1 else ""
+            return f"✅ Approved ({current_approvals} approval{plural})"
         elif review_status == "CHANGES_REQUESTED":
             return "🔴 Changes requested"
         elif review_status == "REVIEW_REQUIRED":
-            return f"⏳ Review required ({current_approvals} approval{'s' if current_approvals != 1 else ''})"
+            plural = "s" if current_approvals != 1 else ""
+            return f"⏳ Review required ({current_approvals} approval{plural})"
         elif review_status is None:
             # Fallback when gh CLI unavailable or no review requirements
             if current_approvals > 0:
@@ -168,3 +178,233 @@ class SlackClient:
         if response.status_code != 200:
             msg = f"Failed to send Slack message: {response.status_code} - {response.text}"
             raise Exception(msg)
+
+    # Block Kit formatting methods
+
+    def post_stale_pr_summary(
+        self, stale_prs: list[StalePR], team_members: list[TeamMember]
+    ) -> None:
+        """
+        Post a Block Kit formatted stale PR summary to Slack.
+
+        Args:
+            stale_prs: List of stale pull requests sorted by staleness
+            team_members: List of team members for @mentions
+
+        Raises:
+            Exception: If the webhook request fails
+        """
+        # Group PRs by category
+        by_category: dict[str, list[StalePR]] = {"rotten": [], "aging": [], "fresh": []}
+        for stale_pr in stale_prs:
+            by_category[stale_pr.category].append(stale_pr)
+
+        # Build blocks
+        blocks = self.build_blocks(by_category, team_members)
+
+        # Send to Slack
+        payload = {"blocks": blocks}
+        response = requests.post(self.webhook_url, json=payload, timeout=10)
+
+        if response.status_code != 200:
+            msg = f"Failed to send Slack message: {response.status_code} - {response.text}"
+            raise Exception(msg)
+
+    def build_blocks(
+        self, by_category: dict[str, list[StalePR]], team_members: list[TeamMember]
+    ) -> list[dict]:
+        """
+        Construct Block Kit blocks for all categories.
+
+        Public API for building Block Kit message blocks without sending.
+        Useful for dry-run mode, testing, and custom integrations.
+
+        Args:
+            by_category: Dictionary mapping category names to lists of StalePRs
+            team_members: List of team members for @mentions
+
+        Returns:
+            List of Block Kit block dictionaries ready for Slack API
+        """
+        blocks = []
+
+        # Add blocks for each category (rotten, aging, fresh)
+        for category in ["rotten", "aging", "fresh"]:
+            prs_in_category = by_category.get(category, [])
+            if not prs_in_category:
+                continue  # Skip empty categories
+
+            # Add category blocks
+            category_blocks = self._build_category_blocks(
+                category, prs_in_category, team_members
+            )
+            blocks.extend(category_blocks)
+
+            # Add divider after each category (except the last one)
+            blocks.append({"type": "divider"})
+
+        # Remove trailing divider if exists
+        if blocks and blocks[-1].get("type") == "divider":
+            blocks.pop()
+
+        # If no blocks were created (all categories empty), return "all clear" message
+        if not blocks:
+            blocks = self._build_empty_state_blocks()
+
+        return blocks
+
+    def _build_category_blocks(
+        self, category: str, prs: list[StalePR], team_members: list[TeamMember]
+    ) -> list[dict]:
+        """
+        Build blocks for a single category with truncation.
+
+        Args:
+            category: Category name ('rotten', 'aging', or 'fresh')
+            prs: List of PRs in this category
+            team_members: List of team members for @mentions
+
+        Returns:
+            List of blocks for this category
+        """
+        blocks = []
+
+        # Add header block
+        blocks.append(self._build_header_block(category))
+
+        # Add PR sections (truncate to MAX_PRS_PER_CATEGORY)
+        displayed_prs = prs[: self.MAX_PRS_PER_CATEGORY]
+        for stale_pr in displayed_prs:
+            blocks.append(self._build_pr_section(stale_pr, team_members))
+
+        # Add truncation warning if needed
+        if len(prs) > self.MAX_PRS_PER_CATEGORY:
+            truncated_count = len(prs) - self.MAX_PRS_PER_CATEGORY
+            blocks.append(self._build_truncation_warning(truncated_count))
+
+        return blocks
+
+    def _build_header_block(self, category: str) -> dict:
+        """
+        Create header block for a category (language-aware).
+
+        Args:
+            category: Category name ('rotten', 'aging', or 'fresh')
+
+        Returns:
+            Block Kit header block dictionary
+        """
+        if category == "rotten":
+            text = "🤢 PR 부패 중..." if self.language == "ko" else "🤢 Rotten PRs"
+        elif category == "aging":
+            text = "🧀 PR 숙성 중..." if self.language == "ko" else "🧀 Aging PRs"
+        else:  # fresh
+            text = "✨ 갓 태어난 PR" if self.language == "ko" else "✨ Fresh PRs"
+
+        return {"type": "header", "text": {"type": "plain_text", "text": text, "emoji": True}}
+
+    def _build_pr_section(self, stale_pr: StalePR, team_members: list[TeamMember]) -> dict:
+        """
+        Create section block for a single PR with mrkdwn formatting.
+
+        Args:
+            stale_pr: The stale PR to format
+            team_members: List of team members for @mentions
+
+        Returns:
+            Block Kit section block dictionary
+        """
+        pr = stale_pr.pr
+        days = int(stale_pr.staleness_days)
+
+        # Create username to slack ID mapping
+        username_to_slack_id = {
+            member.github_username: member.slack_user_id
+            for member in team_members
+            if member.slack_user_id
+        }
+
+        # Format author mention
+        author_mention = self._format_user_mention(pr.author, username_to_slack_id)
+
+        # Format age string (language-aware)
+        age_text = f"{days}일 묵음" if self.language == "ko" else f"{days} days old"
+
+        # Format review count (language-aware)
+        review_count = len(pr.reviewers)
+        if self.language == "ko":
+            review_text = f"리뷰 {review_count}개 대기중"
+        else:
+            review_text = f"{review_count} review{'s' if review_count != 1 else ''} pending"
+
+        # Build mrkdwn text
+        escaped_title = self._escape_mrkdwn(pr.title)
+        text = (
+            f"*<{pr.url}|{pr.repo_name}#{pr.number}: {escaped_title}>*\n"
+            f":bust_in_silhouette: {author_mention} • "
+            f":clock3: {age_text} • "
+            f":eyes: {review_text}"
+        )
+
+        return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
+
+    def _build_truncation_warning(self, count: int) -> dict:
+        """
+        Create context block warning about truncated PRs.
+
+        Args:
+            count: Number of PRs not shown
+
+        Returns:
+            Block Kit context block dictionary
+        """
+        if self.language == "ko":
+            warning_text = f"⚠️ +{count}개 더 있음. 전체 목록은 GitHub에서 확인하세요."
+        else:
+            plural = "s" if count != 1 else ""
+            warning_text = (
+                f"⚠️ +{count} more PR{plural} not shown. "
+                "Check GitHub for full list."
+            )
+
+        return {"type": "context", "elements": [{"type": "mrkdwn", "text": warning_text}]}
+
+    def _build_empty_state_blocks(self) -> list[dict]:
+        """
+        Create "all clear" Block Kit message when no PRs exist.
+
+        Returns:
+            List of blocks for empty state message
+        """
+        if self.language == "ko":
+            header_text = "🎉 모든 PR 리뷰 완료!"
+            message_text = (
+                "축하합니다! 리뷰 대기 중인 PR이 없습니다. "
+                "팀이 모든 코드 리뷰를 완료했습니다!"
+            )
+        else:
+            header_text = "🎉 All Clear!"
+            message_text = (
+                "Great news! No stale PRs found. "
+                "The team is all caught up on code reviews!"
+            )
+
+        return [
+            {"type": "header", "text": {"type": "plain_text", "text": header_text, "emoji": True}},
+            {"type": "section", "text": {"type": "mrkdwn", "text": message_text}},
+        ]
+
+    def _escape_mrkdwn(self, text: str) -> str:
+        """
+        Escape special characters to prevent unintended mrkdwn formatting.
+
+        Args:
+            text: Text to escape
+
+        Returns:
+            Escaped text safe for mrkdwn
+        """
+        text = text.replace("&", "&amp;")
+        text = text.replace("<", "&lt;")
+        text = text.replace(">", "&gt;")
+        return text

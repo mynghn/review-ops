@@ -66,10 +66,37 @@ GITHUB_ORG=your-org-name
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
 
 # Optional
+LANGUAGE=en  # Report language: 'en' (English) or 'ko' (Korean/한국어)
 LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 API_TIMEOUT=30  # API request timeout in seconds
 GH_SEARCH_LIMIT=1000  # Maximum PRs to fetch per search query (default: 1000)
 ```
+
+#### Language Support
+
+The tool supports bilingual Slack notifications:
+
+- **English (`en`)**: Default language with standard expressions
+- **Korean (`ko`)**: Korean language with culturally appropriate expressions
+
+To configure language, set the `LANGUAGE` environment variable in your `.env` file:
+
+```bash
+# For English (default)
+LANGUAGE=en
+
+# For Korean
+LANGUAGE=ko
+```
+
+**Korean Features**:
+- Witty, workplace-appropriate expressions:
+  - 🤢 "PR 부패 중..." (PR rotting...)
+  - 🧀 "PR 숙성 중..." (PR aging like wine...)
+  - ✨ "갓 태어난 PR" (freshly born PR)
+- Natural date formatting: "5일 묵음" (5 days old)
+- Korean review count: "리뷰 3개 대기중" (3 reviews pending)
+- Full UTF-8 support for Korean characters in PR titles and usernames
 
 #### Getting a GitHub Token
 

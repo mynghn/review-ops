@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 import shutil
 from pathlib import Path
@@ -11,6 +10,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from models import Config, TeamMember
+
+# Supported languages for Slack message formatting
+SUPPORTED_LANGUAGES = {"en", "ko"}
 
 
 def load_config() -> Config:
@@ -92,6 +94,14 @@ def load_config() -> Config:
         msg = f"Invalid GH_SEARCH_LIMIT '{gh_search_limit_str}'. Must be a positive integer."
         raise ValueError(msg) from e
 
+    language = os.getenv("LANGUAGE", "en").lower()
+    if language not in SUPPORTED_LANGUAGES:
+        msg = (
+            f"Invalid LANGUAGE '{language}'. "
+            f"Must be one of: {', '.join(sorted(SUPPORTED_LANGUAGES))}"
+        )
+        raise ValueError(msg)
+
     # Check for gh CLI availability
     _check_gh_cli_available()
 
@@ -102,6 +112,7 @@ def load_config() -> Config:
         log_level=log_level,
         api_timeout=api_timeout,
         gh_search_limit=gh_search_limit,
+        language=language,
     )
 
 

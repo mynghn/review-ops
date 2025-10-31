@@ -131,3 +131,92 @@ def test_send_message_network_error(slack_client):
 
         with pytest.raises(requests.exceptions.ConnectionError):
             slack_client.send_message("Test message")
+
+
+def test_post_stale_pr_summary_webhook_compatibility(
+    slack_client, sample_stale_prs, sample_team_members
+):
+    """Test that Block Kit implementation maintains webhook compatibility (T031a).
+
+    Verifies:
+    - Webhook URL remains unchanged
+    - POST method is used
+    - Headers include Content-Type: application/json
+    - Request timeout is set
+    """
+    with patch("requests.post") as mock_post:
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = "ok"
+        mock_post.return_value = mock_response
+
+        # Call the Block Kit method
+        slack_client.post_stale_pr_summary(sample_stale_prs, sample_team_members)
+
+        # Verify webhook was called exactly once
+        mock_post.assert_called_once()
+
+        # Extract call arguments
+        call_args = mock_post.call_args
+        called_url = call_args[0][0]
+        called_kwargs = call_args[1]
+
+        # Verify webhook URL is unchanged
+        assert called_url == "https://hooks.slack.com/services/T00/B00/XXX"
+
+        # Verify JSON payload is used (not 'text')
+        assert "json" in called_kwargs
+        payload = called_kwargs["json"]
+
+        # Verify Block Kit structure
+        assert "blocks" in payload
+        assert isinstance(payload["blocks"], list)
+        assert len(payload["blocks"]) > 0
+
+        # Verify timeout is set
+        assert "timeout" in called_kwargs
+        assert called_kwargs["timeout"] == 10
+
+
+def test_post_stale_pr_summary_full_message_structure(
+    slack_client, sample_stale_prs, sample_team_members
+):
+    """Test full Block Kit message structure validation (T032)."""
+    with patch("requests.post") as mock_post:
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = "ok"
+        mock_post.return_value = mock_response
+
+        slack_client.post_stale_pr_summary(sample_stale_prs, sample_team_members)
+
+        payload = mock_post.call_args[1]["json"]
+
+        # Validate top-level structure
+        assert "blocks" in payload
+        blocks = payload["blocks"]
+        assert isinstance(blocks, list)
+
+        # Validate block types
+        block_types = [block.get("type") for block in blocks]
+        assert "header" in block_types  # Should have category headers
+        assert "section" in block_types  # Should have PR sections
+        assert "divider" in block_types or len(block_types) == 2  # Dividers between categories
+
+        # Validate each block has required fields
+        for block in blocks:
+            assert "type" in block
+            assert block["type"] in ["header", "section", "divider", "context"]
+
+            if block["type"] == "header":
+                assert "text" in block
+                assert block["text"]["type"] == "plain_text"
+                assert "text" in block["text"]
+
+            elif block["type"] == "section":
+                assert "text" in block
+                assert block["text"]["type"] == "mrkdwn"
+                assert "text" in block["text"]
+
+        # Ensure block count is under Slack's 50-block limit
+        assert len(blocks) <= 50
