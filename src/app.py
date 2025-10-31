@@ -81,7 +81,10 @@ def main() -> int:
             token=config.github_token,
             gh_search_limit=config.gh_search_limit
         )
-        slack_client = SlackClient(webhook_url=config.slack_webhook_url)
+        slack_client = SlackClient(
+            webhook_url=config.slack_webhook_url,
+            language=config.language
+        )
 
         # Fetch PRs involving team members using GitHub Search API
         logger.info(f"Searching for open PRs involving team members in: {config.github_org}")
@@ -114,21 +117,46 @@ def main() -> int:
         stale_prs.sort(key=lambda s: s.staleness_days, reverse=True)
 
         # Format and send Slack message
-        message = slack_client.format_message(stale_prs, team_members)
-        logger.debug(f"Slack message length: {len(message)} characters")
-
         if args.dry_run:
-            # Dry run mode: print to console instead of sending
+            # Dry run mode: Build Block Kit JSON for testing
+            logger.info("Building Block Kit payload (dry-run mode)")
+
+            # Group PRs by category (same logic as production)
+            by_category: dict[str, list[StalePR]] = {"rotten": [], "aging": [], "fresh": []}
+            for stale_pr in stale_prs:
+                by_category[stale_pr.category].append(stale_pr)
+
+            # Build blocks using public API
+            blocks = slack_client.build_blocks(by_category, team_members)
+            payload = {"blocks": blocks}
+
+            # Pretty-print JSON with UTF-8 support
+            import json
+
+            json_output = json.dumps(payload, indent=2, ensure_ascii=False)
+
             print("\n" + "=" * 80)
-            print("DRY RUN MODE - Message that would be sent to Slack:")
+            print("DRY RUN MODE - Block Kit JSON Payload")
             print("=" * 80)
-            print(message)
+            print(json_output)
+            print("=" * 80)
+            print(f"\nℹ️  Block count: {len(blocks)}/50 (max limit)")
+            print(f"ℹ️  Payload size: {len(json_output):,} bytes")
+            print(f"ℹ️  Language: {config.language}")
+            print(
+                f"ℹ️  PRs by category: "
+                f"Rotten={len(by_category['rotten'])}, "
+                f"Aging={len(by_category['aging'])}, "
+                f"Fresh={len(by_category['fresh'])}"
+            )
+            print("\n🔗 Test visually: https://app.slack.com/block-kit-builder")
+            print("💡 Tip: Copy JSON above and paste into Block Kit Builder")
             print("=" * 80 + "\n")
-            logger.info("✅ Dry run completed - message printed above")
+            logger.info("✅ Dry run completed - Block Kit JSON printed above")
         else:
-            # Normal mode: send to Slack
-            logger.info("Sending Slack notification")
-            slack_client.send_message(message)
+            # Normal mode: send Block Kit formatted message to Slack
+            logger.info("Sending Block Kit formatted Slack notification")
+            slack_client.post_stale_pr_summary(stale_prs, team_members)
             logger.info("✅ Slack notification sent successfully")
 
         # Summary

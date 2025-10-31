@@ -181,6 +181,95 @@ class TestLoadConfig:
         ):
             load_config()
 
+    def test_load_config_default_language(self):
+        """Test that LANGUAGE defaults to 'en' when not set."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                },
+                clear=True,
+            ),
+        ):
+            config = load_config()
+            assert config.language == "en"
+
+    def test_load_config_valid_language_en(self):
+        """Test successful config loading with LANGUAGE='en'."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "LANGUAGE": "en",
+                },
+                clear=True,
+            ),
+        ):
+            config = load_config()
+            assert config.language == "en"
+
+    def test_load_config_valid_language_ko(self):
+        """Test successful config loading with LANGUAGE='ko'."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "LANGUAGE": "ko",
+                },
+                clear=True,
+            ),
+        ):
+            config = load_config()
+            assert config.language == "ko"
+
+    def test_load_config_language_case_insensitive(self):
+        """Test that LANGUAGE is case-insensitive."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "LANGUAGE": "EN",
+                },
+                clear=True,
+            ),
+        ):
+            config = load_config()
+            assert config.language == "en"
+
+    def test_load_config_invalid_language(self):
+        """Test error when LANGUAGE is invalid."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "LANGUAGE": "fr",
+                },
+                clear=True,
+            ),
+            pytest.raises(ValueError, match="Invalid LANGUAGE"),
+        ):
+            load_config()
+
 
 class TestLoadTeamMembers:
     """Tests for load_team_members function."""

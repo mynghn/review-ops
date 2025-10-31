@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
 import pytest
-from github import GithubException
 
 from github_client import GitHubClient
 

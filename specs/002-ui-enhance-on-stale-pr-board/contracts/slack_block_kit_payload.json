@@ -1,0 +1,210 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Slack Block Kit Webhook Payload",
+  "description": "Contract for Slack incoming webhook with Block Kit formatting for stale PR board",
+  "type": "object",
+  "required": ["blocks"],
+  "properties": {
+    "blocks": {
+      "type": "array",
+      "description": "Array of Block Kit layout blocks",
+      "maxItems": 50,
+      "items": {
+        "oneOf": [
+          {"$ref": "#/definitions/HeaderBlock"},
+          {"$ref": "#/definitions/SectionBlock"},
+          {"$ref": "#/definitions/DividerBlock"},
+          {"$ref": "#/definitions/ContextBlock"}
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "HeaderBlock": {
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "header"
+        },
+        "text": {
+          "type": "object",
+          "required": ["type", "text"],
+          "properties": {
+            "type": {"type": "string", "const": "plain_text"},
+            "text": {
+              "type": "string",
+              "maxLength": 150,
+              "description": "Category header (e.g., '🤢 Rotten PRs' or '🤢 PR 부패 중...')"
+            },
+            "emoji": {"type": "boolean", "default": true}
+          }
+        }
+      },
+      "example": {
+        "type": "header",
+        "text": {
+          "type": "plain_text",
+          "text": "🤢 Rotten PRs",
+          "emoji": true
+        }
+      }
+    },
+    "SectionBlock": {
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "section"
+        },
+        "text": {
+          "type": "object",
+          "required": ["type", "text"],
+          "properties": {
+            "type": {"type": "string", "const": "mrkdwn"},
+            "text": {
+              "type": "string",
+              "maxLength": 3000,
+              "description": "PR details with mrkdwn formatting (bold title, author, age, reviews)"
+            }
+          }
+        }
+      },
+      "example": {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*<https://github.com/org/repo/pull/123|PR #123: Fix authentication bug>*\n:bust_in_silhouette: @johndoe • :clock3: 14 days old • :eyes: 3 reviews pending"
+        }
+      }
+    },
+    "DividerBlock": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "divider"
+        }
+      },
+      "example": {
+        "type": "divider"
+      }
+    },
+    "ContextBlock": {
+      "type": "object",
+      "required": ["type", "elements"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "context"
+        },
+        "elements": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "required": ["type", "text"],
+            "properties": {
+              "type": {"type": "string", "const": "mrkdwn"},
+              "text": {
+                "type": "string",
+                "maxLength": 3000,
+                "description": "Truncation warning or metadata"
+              }
+            }
+          }
+        }
+      },
+      "example": {
+        "type": "context",
+        "elements": [
+          {
+            "type": "mrkdwn",
+            "text": "⚠️ +5 more PRs not shown. Check GitHub for full list."
+          }
+        ]
+      }
+    }
+  },
+  "examples": [
+    {
+      "blocks": [
+        {
+          "type": "header",
+          "text": {
+            "type": "plain_text",
+            "text": "🤢 Rotten PRs",
+            "emoji": true
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*<https://github.com/org/repo/pull/123|PR #123: Fix authentication bug>*\n:bust_in_silhouette: @johndoe • :clock3: 14 days old • :eyes: 3 reviews pending"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*<https://github.com/org/repo/pull/456|PR #456: Update dependencies>*\n:bust_in_silhouette: @janedoe • :clock3: 21 days old • :eyes: 1 review pending"
+          }
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "⚠️ +5 more PRs not shown. Check GitHub for full list."
+            }
+          ]
+        },
+        {
+          "type": "divider"
+        },
+        {
+          "type": "header",
+          "text": {
+            "type": "plain_text",
+            "text": "🧀 Aging PRs",
+            "emoji": true
+          }
+        }
+      ]
+    }
+  ],
+  "notes": {
+    "limits": {
+      "max_blocks_per_message": 50,
+      "max_text_length_per_block": 3000,
+      "max_header_text_length": 150,
+      "max_context_elements": 10
+    },
+    "mrkdwn_formatting": {
+      "bold": "*text*",
+      "italic": "_text_",
+      "strikethrough": "~text~",
+      "code": "`text`",
+      "link": "<url|text>",
+      "emoji": ":emoji_name:"
+    },
+    "character_escaping": {
+      "required": ["&", "<", ">"],
+      "escape_rules": {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;"
+      }
+    },
+    "response_codes": {
+      "200": "Message accepted",
+      "400": "Bad request (invalid Block Kit JSON)",
+      "404": "Webhook URL not found",
+      "500": "Slack server error"
+    }
+  }
+}
