@@ -102,6 +102,64 @@ def load_config() -> Config:
         )
         raise ValueError(msg)
 
+    # Rate limiting configuration
+    max_prs_total_str = os.getenv("MAX_PRS_TOTAL", "30")
+    try:
+        max_prs_total = int(max_prs_total_str)
+        if not 10 <= max_prs_total <= 100:
+            msg = "MAX_PRS_TOTAL must be between 10 and 100"
+            raise ValueError(msg)
+    except ValueError as e:
+        msg = f"Invalid MAX_PRS_TOTAL '{max_prs_total_str}'. Must be between 10 and 100."
+        raise ValueError(msg) from e
+
+    max_retries_str = os.getenv("MAX_RETRIES", "3")
+    try:
+        max_retries = int(max_retries_str)
+        if not 1 <= max_retries <= 5:
+            msg = "MAX_RETRIES must be between 1 and 5"
+            raise ValueError(msg)
+    except ValueError as e:
+        msg = f"Invalid MAX_RETRIES '{max_retries_str}'. Must be between 1 and 5."
+        raise ValueError(msg) from e
+
+    rate_limit_wait_threshold_str = os.getenv("RATE_LIMIT_WAIT_THRESHOLD", "300")
+    try:
+        rate_limit_wait_threshold = int(rate_limit_wait_threshold_str)
+        if not 60 <= rate_limit_wait_threshold <= 600:
+            msg = "RATE_LIMIT_WAIT_THRESHOLD must be between 60 and 600"
+            raise ValueError(msg)
+    except ValueError as e:
+        msg = (
+            f"Invalid RATE_LIMIT_WAIT_THRESHOLD '{rate_limit_wait_threshold_str}'. "
+            "Must be between 60 and 600."
+        )
+        raise ValueError(msg) from e
+
+    retry_backoff_base_str = os.getenv("RETRY_BACKOFF_BASE", "1.0")
+    try:
+        retry_backoff_base = float(retry_backoff_base_str)
+        if not 0.5 <= retry_backoff_base <= 2.0:
+            msg = "RETRY_BACKOFF_BASE must be between 0.5 and 2.0"
+            raise ValueError(msg)
+    except ValueError as e:
+        msg = f"Invalid RETRY_BACKOFF_BASE '{retry_backoff_base_str}'. Must be between 0.5 and 2.0."
+        raise ValueError(msg) from e
+
+    use_graphql_batch_str = os.getenv("USE_GRAPHQL_BATCH", "true").lower()
+    use_graphql_batch = use_graphql_batch_str in {"true", "1", "yes", "on"}
+
+    # API call delay to prevent secondary rate limits (in seconds)
+    api_call_delay_str = os.getenv("API_CALL_DELAY", "2.0")
+    try:
+        api_call_delay = float(api_call_delay_str)
+        if not 0.0 <= api_call_delay <= 10.0:
+            msg = "API_CALL_DELAY must be between 0.0 and 10.0"
+            raise ValueError(msg)
+    except ValueError as e:
+        msg = f"Invalid API_CALL_DELAY '{api_call_delay_str}'. Must be between 0.0 and 10.0."
+        raise ValueError(msg) from e
+
     # Check for gh CLI availability
     _check_gh_cli_available()
 
@@ -113,6 +171,12 @@ def load_config() -> Config:
         api_timeout=api_timeout,
         gh_search_limit=gh_search_limit,
         language=language,
+        max_prs_total=max_prs_total,
+        max_retries=max_retries,
+        rate_limit_wait_threshold=rate_limit_wait_threshold,
+        retry_backoff_base=retry_backoff_base,
+        use_graphql_batch=use_graphql_batch,
+        api_call_delay=api_call_delay,
     )
 
 
@@ -133,7 +197,10 @@ def _check_gh_cli_available() -> None:
         install_cmd = {
             "Darwin": "brew install gh",
             "Linux": "See https://github.com/cli/cli/blob/trunk/docs/install_linux.md",
-            "Windows": "See https://github.com/cli/cli#installation or use: winget install GitHub.cli"
+            "Windows": (
+                "See https://github.com/cli/cli#installation "
+                "or use: winget install GitHub.cli"
+            )
         }.get(system, "See https://cli.github.com/")
 
         msg = (
@@ -184,6 +251,15 @@ def load_team_members(file_path: str = "team_members.json") -> list[TeamMember]:
 
     if not data:
         msg = "Team members file must contain at least one team member"
+        raise ValueError(msg)
+
+    # Validate team size (FR-017)
+    if len(data) > 15:
+        msg = (
+            f"Team has {len(data)} members, which exceeds the recommended limit of 15. "
+            "Large teams may experience GitHub API rate limit issues. "
+            "Consider splitting into multiple runs or increasing MAX_PRS_TOTAL."
+        )
         raise ValueError(msg)
 
     team_members = []

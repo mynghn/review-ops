@@ -363,3 +363,335 @@ class TestLoadTeamMembers:
         members = load_team_members(str(team_file))
         assert members[0].github_username == "alice"
         assert members[0].slack_user_id == "U1234567890"
+
+
+class TestRateLimitConfigValidation:
+    """Tests for rate limit configuration validation."""
+
+    def test_max_prs_total_valid_minimum(self):
+        """Test MAX_PRS_TOTAL at minimum valid value (10)."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "MAX_PRS_TOTAL": "10",
+                },
+                clear=True,
+            ),
+        ):
+            config = load_config()
+            assert config.max_prs_total == 10
+
+    def test_max_prs_total_valid_maximum(self):
+        """Test MAX_PRS_TOTAL at maximum valid value (100)."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "MAX_PRS_TOTAL": "100",
+                },
+                clear=True,
+            ),
+        ):
+            config = load_config()
+            assert config.max_prs_total == 100
+
+    def test_max_prs_total_below_minimum(self):
+        """Test MAX_PRS_TOTAL below minimum (9) raises error."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "MAX_PRS_TOTAL": "9",
+                },
+                clear=True,
+            ),pytest.raises(ValueError, match="Invalid MAX_PRS_TOTAL.*Must be between 10 and 100")
+        ):
+            load_config()
+
+    def test_max_prs_total_above_maximum(self):
+        """Test MAX_PRS_TOTAL above maximum (101) raises error."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "MAX_PRS_TOTAL": "101",
+                },
+                clear=True,
+            ),pytest.raises(ValueError, match="Invalid MAX_PRS_TOTAL.*Must be between 10 and 100")
+        ):
+            load_config()
+
+    def test_max_retries_valid_range(self):
+        """Test MAX_RETRIES within valid range (1-5)."""
+        for value in [1, 3, 5]:
+            with (
+                patch("shutil.which", return_value="/usr/local/bin/gh"),
+                patch.dict(
+                    os.environ,
+                    {
+                        "GH_TOKEN": "ghp_test123",
+                        "GITHUB_ORG": "test-org",
+                        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                        "MAX_RETRIES": str(value),
+                    },
+                    clear=True,
+                ),
+            ):
+                config = load_config()
+                assert config.max_retries == value
+
+    def test_max_retries_below_minimum(self):
+        """Test MAX_RETRIES below minimum (0) raises error."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "MAX_RETRIES": "0",
+                },
+                clear=True,
+            ),pytest.raises(ValueError, match="Invalid MAX_RETRIES.*Must be between 1 and 5")
+        ):
+            load_config()
+
+    def test_max_retries_above_maximum(self):
+        """Test MAX_RETRIES above maximum (6) raises error."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "MAX_RETRIES": "6",
+                },
+                clear=True,
+            ),pytest.raises(ValueError, match="Invalid MAX_RETRIES.*Must be between 1 and 5")
+        ):
+            load_config()
+
+    def test_rate_limit_wait_threshold_valid_boundaries(self):
+        """Test RATE_LIMIT_WAIT_THRESHOLD at boundaries (60, 600)."""
+        for value in [60, 300, 600]:
+            with (
+                patch("shutil.which", return_value="/usr/local/bin/gh"),
+                patch.dict(
+                    os.environ,
+                    {
+                        "GH_TOKEN": "ghp_test123",
+                        "GITHUB_ORG": "test-org",
+                        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                        "RATE_LIMIT_WAIT_THRESHOLD": str(value),
+                    },
+                    clear=True,
+                ),
+            ):
+                config = load_config()
+                assert config.rate_limit_wait_threshold == value
+
+    def test_rate_limit_wait_threshold_below_minimum(self):
+        """Test RATE_LIMIT_WAIT_THRESHOLD below minimum (59) raises error."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "RATE_LIMIT_WAIT_THRESHOLD": "59",
+                },
+                clear=True,
+            ),
+        ):
+            with pytest.raises(ValueError, match="Invalid RATE_LIMIT_WAIT_THRESHOLD.*Must be between 60 and 600"):
+                load_config()
+
+    def test_rate_limit_wait_threshold_above_maximum(self):
+        """Test RATE_LIMIT_WAIT_THRESHOLD above maximum (601) raises error."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "RATE_LIMIT_WAIT_THRESHOLD": "601",
+                },
+                clear=True,
+            ),
+        ):
+            with pytest.raises(ValueError, match="Invalid RATE_LIMIT_WAIT_THRESHOLD.*Must be between 60 and 600"):
+                load_config()
+
+    def test_retry_backoff_base_valid_range(self):
+        """Test RETRY_BACKOFF_BASE within valid range (0.5-2.0)."""
+        for value in ["0.5", "1.0", "2.0"]:
+            with (
+                patch("shutil.which", return_value="/usr/local/bin/gh"),
+                patch.dict(
+                    os.environ,
+                    {
+                        "GH_TOKEN": "ghp_test123",
+                        "GITHUB_ORG": "test-org",
+                        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                        "RETRY_BACKOFF_BASE": value,
+                    },
+                    clear=True,
+                ),
+            ):
+                config = load_config()
+                assert config.retry_backoff_base == float(value)
+
+    def test_retry_backoff_base_below_minimum(self):
+        """Test RETRY_BACKOFF_BASE below minimum (0.4) raises error."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "RETRY_BACKOFF_BASE": "0.4",
+                },
+                clear=True,
+            ),
+        ):
+            with pytest.raises(ValueError, match="Invalid RETRY_BACKOFF_BASE.*Must be between 0.5 and 2.0"):
+                load_config()
+
+    def test_retry_backoff_base_above_maximum(self):
+        """Test RETRY_BACKOFF_BASE above maximum (2.1) raises error."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "RETRY_BACKOFF_BASE": "2.1",
+                },
+                clear=True,
+            ),
+        ):
+            with pytest.raises(ValueError, match="Invalid RETRY_BACKOFF_BASE.*Must be between 0.5 and 2.0"):
+                load_config()
+
+    def test_use_graphql_batch_true_values(self):
+        """Test USE_GRAPHQL_BATCH parses true values correctly."""
+        for value in ["true", "True", "TRUE", "1", "yes", "on"]:
+            with (
+                patch("shutil.which", return_value="/usr/local/bin/gh"),
+                patch.dict(
+                    os.environ,
+                    {
+                        "GH_TOKEN": "ghp_test123",
+                        "GITHUB_ORG": "test-org",
+                        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                        "USE_GRAPHQL_BATCH": value,
+                    },
+                    clear=True,
+                ),
+            ):
+                config = load_config()
+                assert config.use_graphql_batch is True
+
+    def test_use_graphql_batch_false_values(self):
+        """Test USE_GRAPHQL_BATCH parses false values correctly."""
+        for value in ["false", "False", "FALSE", "0", "no", "off", "anything_else"]:
+            with (
+                patch("shutil.which", return_value="/usr/local/bin/gh"),
+                patch.dict(
+                    os.environ,
+                    {
+                        "GH_TOKEN": "ghp_test123",
+                        "GITHUB_ORG": "test-org",
+                        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                        "USE_GRAPHQL_BATCH": value,
+                    },
+                    clear=True,
+                ),
+            ):
+                config = load_config()
+                assert config.use_graphql_batch is False
+
+    def test_all_rate_limit_configs_together(self):
+        """Test all rate limit configs can be set together."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "MAX_PRS_TOTAL": "50",
+                    "MAX_RETRIES": "5",
+                    "RATE_LIMIT_WAIT_THRESHOLD": "600",
+                    "RETRY_BACKOFF_BASE": "2.0",
+                    "USE_GRAPHQL_BATCH": "true",
+                },
+                clear=True,
+            ),
+        ):
+            config = load_config()
+            assert config.max_prs_total == 50
+            assert config.max_retries == 5
+            assert config.rate_limit_wait_threshold == 600
+            assert config.retry_backoff_base == 2.0
+            assert config.use_graphql_batch is True
+
+
+class TestTeamSizeValidation:
+    """Tests for team size validation (max 15 members)."""
+
+    def test_team_size_at_maximum(self, tmp_path: Path):
+        """Test team with exactly 15 members is valid."""
+        team_file = tmp_path / "team.json"
+        members = [{"github_username": f"user{i}"} for i in range(15)]
+        team_file.write_text(json.dumps(members))
+
+        result = load_team_members(str(team_file))
+        assert len(result) == 15
+
+    def test_team_size_exceeds_maximum(self, tmp_path: Path):
+        """Test team with 16 members raises error."""
+        team_file = tmp_path / "team.json"
+        members = [{"github_username": f"user{i}"} for i in range(16)]
+        team_file.write_text(json.dumps(members))
+
+        with pytest.raises(ValueError, match="Team has 16 members.*exceeds.*limit of 15"):
+            load_team_members(str(team_file))
+
+    def test_team_size_well_over_maximum(self, tmp_path: Path):
+        """Test team with 20 members raises error."""
+        team_file = tmp_path / "team.json"
+        members = [{"github_username": f"user{i}"} for i in range(20)]
+        team_file.write_text(json.dumps(members))
+
+        with pytest.raises(ValueError, match="Team has 20 members.*exceeds.*limit of 15"):
+            load_team_members(str(team_file))

@@ -6,6 +6,7 @@ import argparse
 import logging
 import os
 import sys
+from datetime import datetime
 
 from config import load_config, load_team_members
 from github_client import GitHubClient
@@ -79,12 +80,60 @@ def main() -> int:
         # Initialize clients
         github_client = GitHubClient(
             token=config.github_token,
-            gh_search_limit=config.gh_search_limit
+            gh_search_limit=config.gh_search_limit,
+            max_retries=config.max_retries,
+            retry_backoff_base=config.retry_backoff_base,
+            use_graphql_batch=config.use_graphql_batch,
+            api_call_delay=config.api_call_delay,
         )
         slack_client = SlackClient(
             webhook_url=config.slack_webhook_url,
-            language=config.language
+            language=config.language,
+            max_prs_total=config.max_prs_total,
         )
+
+        # Check rate limit before making API calls
+        logger.info("Checking GitHub API rate limit...")
+        rate_limit_status = github_client.check_rate_limit()
+
+        if rate_limit_status:
+            # Warn if quota is low (< 100)
+            if rate_limit_status.remaining < 100:
+                logger.warning(
+                    f"⚠️  Low GitHub API quota: "
+                    f"{rate_limit_status.remaining}/{rate_limit_status.limit} remaining"
+                )
+
+            # Check if we should proceed based on rate limit
+            if (
+                rate_limit_status.is_exhausted
+                and not github_client._should_proceed(
+                    rate_limit_status, config.rate_limit_wait_threshold
+                )
+            ):
+                # Fail fast scenario - reset time too distant
+                reset_time = datetime.fromtimestamp(rate_limit_status.reset_timestamp)
+                wait_hours = (
+                    rate_limit_status.wait_seconds / 3600 if rate_limit_status.wait_seconds else 0
+                )
+
+                error_msg = (
+                    f"GitHub API rate limit exhausted. "
+                    f"Reset in {wait_hours:.1f} hours at "
+                    f"{reset_time.strftime('%Y-%m-%d %H:%M:%S')}. "
+                    f"This exceeds the configured wait threshold of "
+                    f"{config.rate_limit_wait_threshold}s. "
+                    f"Please try again later or increase RATE_LIMIT_WAIT_THRESHOLD."
+                )
+
+                if args.dry_run:
+                    # In dry-run mode, show partial results if available
+                    logger.warning(f"⚠️  {error_msg}")
+                    logger.warning("Dry-run mode: would have failed here. Exiting.")
+                    return 1
+                else:
+                    logger.error(f"❌ {error_msg}")
+                    return 1
 
         # Fetch PRs involving team members using GitHub Search API
         logger.info(f"Searching for open PRs involving team members in: {config.github_org}")
@@ -171,6 +220,29 @@ def main() -> int:
             logger.info(f"  ✨ Fresh (1-3 days): {by_category['fresh']}")
         else:
             logger.info("🎉 No stale PRs found!")
+
+        # Log API metrics
+        metrics = github_client.metrics
+        logger.info("API Metrics:")
+        logger.info(f"  Search calls: {metrics.search_calls}")
+        if config.use_graphql_batch:
+            logger.info(f"  GraphQL batch calls: {metrics.graphql_calls}")
+            logger.info(f"  REST calls avoided: {metrics.rest_detail_calls}")
+            if metrics.graphql_calls > 0:
+                optimization_rate = (
+                    metrics.rest_detail_calls / (metrics.rest_detail_calls + metrics.graphql_calls)
+                ) * 100
+                logger.info(f"  Optimization rate: {optimization_rate:.1f}%")
+        else:
+            logger.info(f"  REST detail calls: {metrics.rest_detail_calls}")
+        logger.info(f"  Retry attempts: {metrics.retry_attempts}")
+        logger.info(f"  Failed calls: {metrics.failed_calls}")
+        if metrics.search_calls + metrics.graphql_calls + metrics.rest_detail_calls > 0:
+            total_calls = metrics.search_calls + metrics.graphql_calls + metrics.rest_detail_calls
+            success_rate = (
+                (total_calls - metrics.failed_calls) / total_calls
+            ) * 100
+            logger.info(f"  Success rate: {success_rate:.1f}%")
 
         return 0
 

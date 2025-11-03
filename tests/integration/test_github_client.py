@@ -14,7 +14,7 @@ from github_client import GitHubClient
 @pytest.fixture
 def github_client():
     """Create a GitHub client instance."""
-    return GitHubClient(token="test_token")
+    return GitHubClient(token="test_token", use_graphql_batch=False)
 
 
 def test_github_client_initialization():
