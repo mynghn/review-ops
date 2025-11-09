@@ -144,6 +144,7 @@ class TestLoadConfig:
     def test_load_config_default_language(self):
         """Test that LANGUAGE defaults to 'en' when not set."""
         with (
+            patch("config.load_dotenv"),
             patch("shutil.which", return_value="/usr/local/bin/gh"),
             patch.dict(
                 os.environ,
