@@ -83,7 +83,7 @@ def test_table_header_row_korean():
     table_block = next(b for b in blocks if b["type"] == "table")
     header_row = table_block["rows"][0]
 
-    assert header_row[0]["elements"][0]["elements"][0]["text"] == "숙성도"
+    assert header_row[0]["elements"][0]["elements"][0]["text"] == "신선도"
     assert header_row[1]["elements"][0]["elements"][0]["text"] == "경과"
     assert header_row[2]["elements"][0]["elements"][0]["text"] == "PR"
     assert header_row[3]["elements"][0]["elements"][0]["text"] == "리뷰어"
@@ -110,7 +110,7 @@ def _build_table_header_row(self) -> list[dict]:
     """
     headers = {
         "en": ["Staleness", "Age", "PR", "Reviewers"],
-        "ko": ["숙성도", "경과", "PR", "리뷰어"]
+        "ko": ["신선도", "경과", "PR", "리뷰어"]
     }
 
     header_texts = headers[self.language]

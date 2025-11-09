@@ -34,7 +34,7 @@
                 "elements": [
                   {
                     "type": "text",
-                    "text": "숙성도",
+                    "text": "신선도",
                     "style": {
                       "bold": true
                     }

@@ -298,7 +298,7 @@ TRANSLATIONS = {
     },
     "ko": {
         "board_title": ":calendar: 코드 리뷰 현황판",
-        "col_staleness": "숙성도",
+        "col_staleness": "신선도",
         "col_age": "경과",
         "col_pr": "PR",
         "col_reviewers": "리뷰어",

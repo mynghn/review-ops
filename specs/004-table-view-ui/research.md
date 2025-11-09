@@ -125,7 +125,7 @@ This document consolidates findings from Phase 0 research to resolve all technic
 | Context | English | Korean |
 |---------|---------|--------|
 | Header title | `:calendar: Code Review Board` | `:calendar: 코드 리뷰 현황판` |
-| Column 1 header | `Staleness` | `숙성도` |
+| Column 1 header | `Staleness` | `신선도` |
 | Column 2 header | `Age` | `경과` |
 | Column 3 header | `PR` | `PR` |
 | Column 4 header | `Reviewers` | `리뷰어` |
@@ -144,7 +144,7 @@ def _get_header_text(self, column: str) -> str:
             "reviewers": "Reviewers"
         },
         "ko": {
-            "staleness": "숙성도",
+            "staleness": "신선도",
             "age": "경과",
             "pr": "PR",
             "reviewers": "리뷰어"

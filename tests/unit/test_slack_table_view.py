@@ -105,8 +105,8 @@ def test_table_header_row_korean():
     # Assert header cells with Korean labels
     assert len(header_row) == 5
 
-    # Column 1: 숙성도 (Staleness)
-    assert header_row[0]["elements"][0]["elements"][0]["text"] == "숙성도"
+    # Column 1: 신선도 (Staleness)
+    assert header_row[0]["elements"][0]["elements"][0]["text"] == "신선도"
     assert header_row[0]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
     # Column 2: 경과 (Age)

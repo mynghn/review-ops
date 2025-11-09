@@ -94,7 +94,7 @@ Each cell MUST be a `rich_text` block with:
 1. **Header text** MUST match configured language
 2. **Column headers** MUST use correct translations:
    - EN: "Staleness", "Age", "PR", "Reviewers"
-   - KO: "숙성도", "경과", "PR", "리뷰어"
+   - KO: "신선도", "경과", "PR", "리뷰어"
 3. **Empty state** MUST use correct translation
 4. **Truncation warning** MUST use correct translation with `{count}` replaced
 

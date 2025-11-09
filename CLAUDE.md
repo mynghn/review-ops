@@ -74,7 +74,7 @@ Python 3.12: Follow standard conventions
 
 ### Translation Strings (Table View)
 1. Board title: ":calendar: Code Review Board" / ":calendar: 코드 리뷰 현황판"
-2. Column header: "Staleness" / "숙성도"
+2. Column header: "Staleness" / "신선도"
 3. Column header: "Age" / "경과"
 4. Column header: "PR" / "PR"
 5. Column header: "Author" / "Author" (same English expression used in both languages)

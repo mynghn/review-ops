@@ -470,7 +470,7 @@ class SlackClient:
         """
         headers = {
             "en": ["Staleness", "Age", "PR", "Author", "Reviewers"],
-            "ko": ["숙성도", "경과", "PR", "Author", "리뷰어"],
+            "ko": ["신선도", "경과", "PR", "Author", "리뷰어"],
         }
 
         header_texts = headers[self.language]
