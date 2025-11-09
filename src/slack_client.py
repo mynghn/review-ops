@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import requests
 
-from models import StalePR, TeamMember
+from models import PullRequest, StalePR, TeamMember
 
 
 class SlackClient:
@@ -517,8 +517,8 @@ class SlackClient:
         ]
         col_pr = self._build_rich_text_cell(pr_elements)
 
-        # Column 4: Reviewers
-        reviewer_elements = self._build_reviewer_elements(pr.reviewers, team_members)
+        # Column 4: Reviewers (including GitHub teams)
+        reviewer_elements = self._build_reviewer_elements(pr, team_members)
         col_reviewers = self._build_rich_text_cell(reviewer_elements)
 
         return [col_staleness, col_age, col_pr, col_reviewers]
@@ -556,20 +556,23 @@ class SlackClient:
         }
 
     def _build_reviewer_elements(
-        self, reviewers: list[str], team_members: list[TeamMember]
+        self, pr: PullRequest, team_members: list[TeamMember]
     ) -> list[dict]:
         """
         Build reviewer elements with user mentions separated by newlines.
+        GitHub teams are shown first with format "team-name: @user1 @user2",
+        followed by remaining individual reviewers (with deduplication).
 
         Args:
-            reviewers: List of GitHub usernames
+            pr: PullRequest object with reviewers and github_team_reviewers
             team_members: List of team members for Slack user ID mapping
 
         Returns:
             List of elements (user mentions + newlines, or single dash if empty)
         """
-        if not reviewers:
-            return [{"type": "text", "text": "-"}]
+        # Collect all reviewers to display
+        all_reviewer_usernames = set()  # For deduplication
+        elements = []
 
         username_to_slack_id = {
             member.github_username: member.slack_user_id
@@ -577,17 +580,55 @@ class SlackClient:
             if member.slack_user_id
         }
 
-        elements = []
-        for i, reviewer in enumerate(reviewers):
-            slack_id = username_to_slack_id.get(reviewer)
+        def add_user_mention(username: str) -> None:
+            """Helper to add a user mention element."""
+            slack_id = username_to_slack_id.get(username)
             if slack_id:
                 elements.append({"type": "user", "user_id": slack_id})
             else:
                 # Fallback to @username if no Slack ID
-                elements.append({"type": "text", "text": f"@{reviewer}"})
+                elements.append({"type": "text", "text": f"@{username}"})
+
+        # First, collect GitHub team members for deduplication
+        for github_team in pr.github_team_reviewers:
+            all_reviewer_usernames.update(github_team.members)
+
+        # Calculate remaining individual reviewers after deduplication
+        remaining_reviewers = [r for r in pr.reviewers if r not in all_reviewer_usernames]
+
+        # Now display GitHub teams with their members
+        for i, github_team in enumerate(pr.github_team_reviewers):
+            # Add team name prefix with @ and opening parenthesis
+            elements.append({"type": "text", "text": f"@{github_team.team_name} ("})
+
+            # Add team members
+            if github_team.members:
+                for j, member in enumerate(github_team.members):
+                    add_user_mention(member)
+
+                    # Add comma+space between team members (but not after the last one)
+                    if j < len(github_team.members) - 1:
+                        elements.append({"type": "text", "text": ", "})
+
+                # Close parenthesis after members
+                elements.append({"type": "text", "text": ")"})
+            else:
+                # Empty team or failed to fetch members - close with "no members)"
+                elements.append({"type": "text", "text": "no members)"})
+
+            # Add newline after each team (if there are more teams or remaining reviewers)
+            if i < len(pr.github_team_reviewers) - 1 or remaining_reviewers:
+                elements.append({"type": "text", "text": "\n"})
+
+        for i, reviewer in enumerate(remaining_reviewers):
+            add_user_mention(reviewer)
 
             # Add newline between reviewers (but not after the last one)
-            if i < len(reviewers) - 1:
+            if i < len(remaining_reviewers) - 1:
                 elements.append({"type": "text", "text": "\n"})
+
+        # If no reviewers at all, show dash
+        if not elements:
+            return [{"type": "text", "text": "-"}]
 
         return elements

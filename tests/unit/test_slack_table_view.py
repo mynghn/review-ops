@@ -1,8 +1,8 @@
 """Unit tests for Slack table view implementation."""
-import pytest
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
+from models import GitHubTeamReviewRequest, PullRequest, StalePR, TeamMember
 from slack_client import SlackClient
-from models import StalePR, PullRequest, TeamMember
 
 
 # Helper function to create mock PRs for testing
@@ -13,10 +13,13 @@ def create_mock_pr(
     url="https://github.com/org/repo/pull/123",
     author="author1",
     reviewers=None,
+    github_team_reviewers=None,
 ):
     """Create a mock PullRequest for testing."""
     if reviewers is None:
         reviewers = []
+    if github_team_reviewers is None:
+        github_team_reviewers = []
     return PullRequest(
         repo_name=repo_name,
         number=number,
@@ -29,6 +32,7 @@ def create_mock_pr(
         created_at=datetime(2025, 1, 1, 0, 0, 0, tzinfo=UTC),
         ready_at=datetime(2025, 1, 1, 0, 0, 0, tzinfo=UTC),
         base_branch="main",
+        github_team_reviewers=github_team_reviewers,
     )
 
 
@@ -195,3 +199,265 @@ def test_table_no_reviewers():
     assert len(reviewer_cell) == 1
     assert reviewer_cell[0]["type"] == "text"
     assert reviewer_cell[0]["text"] == "-"
+
+
+# === Tests for GitHub Team Review Requests ===
+
+
+def test_github_team_reviewers_display():
+    """Test GitHub team reviewers are displayed with team name and members."""
+    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+
+    # Create GitHub team with members
+    github_team = GitHubTeamReviewRequest(
+        team_name="Backend Team",
+        team_slug="backend-team",
+        members=["alice", "bob"],
+    )
+
+    # Create mock PR with GitHub team reviewer
+    pr = create_mock_pr(
+        repo_name="test-repo",
+        number=123,
+        title="Test PR",
+        reviewers=[],  # No individual reviewers
+        github_team_reviewers=[github_team],
+    )
+    stale_pr = StalePR(pr=pr, staleness_days=5.0)
+
+    team_members = [
+        TeamMember(github_username="alice", slack_user_id="U11111"),
+        TeamMember(github_username="bob", slack_user_id="U22222"),
+    ]
+
+    # Test the method directly
+    data_row = client._build_table_data_row(stale_pr, team_members)
+
+    # Reviewers column should show team name with members
+    reviewer_cell = data_row[3]["elements"][0]["elements"]
+
+    # Should have: "@Backend Team (" + user(alice) + ", " + user(bob) + ")"
+    assert reviewer_cell[0]["type"] == "text"
+    assert reviewer_cell[0]["text"] == "@Backend Team ("
+
+    assert reviewer_cell[1]["type"] == "user"
+    assert reviewer_cell[1]["user_id"] == "U11111"
+
+    assert reviewer_cell[2]["type"] == "text"
+    assert reviewer_cell[2]["text"] == ", "
+
+    assert reviewer_cell[3]["type"] == "user"
+    assert reviewer_cell[3]["user_id"] == "U22222"
+
+    assert reviewer_cell[4]["type"] == "text"
+    assert reviewer_cell[4]["text"] == ")"
+
+
+def test_github_team_and_individual_reviewers_with_deduplication():
+    """Test mixed GitHub team and individual reviewers with deduplication."""
+    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+
+    # Create GitHub team with members alice and bob
+    github_team = GitHubTeamReviewRequest(
+        team_name="Backend Team",
+        team_slug="backend-team",
+        members=["alice", "bob"],
+    )
+
+    # Create mock PR with both GitHub team and individual reviewers
+    # alice is in team AND individually requested - should deduplicate
+    pr = create_mock_pr(
+        repo_name="test-repo",
+        number=123,
+        title="Test PR",
+        reviewers=["alice", "charlie"],  # alice is duplicate, charlie is not in team
+        github_team_reviewers=[github_team],
+    )
+    stale_pr = StalePR(pr=pr, staleness_days=5.0)
+
+    team_members = [
+        TeamMember(github_username="alice", slack_user_id="U11111"),
+        TeamMember(github_username="bob", slack_user_id="U22222"),
+        TeamMember(github_username="charlie", slack_user_id="U33333"),
+    ]
+
+    # Test the method directly
+    data_row = client._build_table_data_row(stale_pr, team_members)
+
+    # Reviewers column should show: @Backend Team (alice, bob), newline, then charlie
+    reviewer_cell = data_row[3]["elements"][0]["elements"]
+
+    # Verify team section: "@Backend Team (" + alice + ", " + bob + ")"
+    assert reviewer_cell[0]["text"] == "@Backend Team ("
+    assert reviewer_cell[1]["user_id"] == "U11111"  # alice
+    assert reviewer_cell[2]["text"] == ", "
+    assert reviewer_cell[3]["user_id"] == "U22222"  # bob
+    assert reviewer_cell[4]["text"] == ")"
+
+    # Newline before individual reviewers
+    assert reviewer_cell[5]["text"] == "\n"
+
+    # Only charlie should be shown (alice is deduplicated)
+    assert reviewer_cell[6]["user_id"] == "U33333"  # charlie
+    assert len(reviewer_cell) == 7  # No more elements
+
+
+def test_multiple_github_teams():
+    """Test multiple GitHub teams are displayed correctly."""
+    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+
+    # Create two GitHub teams
+    team1 = GitHubTeamReviewRequest(
+        team_name="Backend Team",
+        team_slug="backend-team",
+        members=["alice"],
+    )
+    team2 = GitHubTeamReviewRequest(
+        team_name="Frontend Team",
+        team_slug="frontend-team",
+        members=["bob"],
+    )
+
+    # Create mock PR with multiple GitHub teams
+    pr = create_mock_pr(
+        repo_name="test-repo",
+        number=123,
+        title="Test PR",
+        reviewers=[],
+        github_team_reviewers=[team1, team2],
+    )
+    stale_pr = StalePR(pr=pr, staleness_days=5.0)
+
+    team_members = [
+        TeamMember(github_username="alice", slack_user_id="U11111"),
+        TeamMember(github_username="bob", slack_user_id="U22222"),
+    ]
+
+    # Test the method directly
+    data_row = client._build_table_data_row(stale_pr, team_members)
+
+    # Reviewers column should show both teams separated by newline
+    reviewer_cell = data_row[3]["elements"][0]["elements"]
+
+    # Team 1: "@Backend Team (" + alice + ")"
+    assert reviewer_cell[0]["text"] == "@Backend Team ("
+    assert reviewer_cell[1]["user_id"] == "U11111"
+    assert reviewer_cell[2]["text"] == ")"
+
+    # Newline between teams
+    assert reviewer_cell[3]["text"] == "\n"
+
+    # Team 2: "@Frontend Team (" + bob + ")"
+    assert reviewer_cell[4]["text"] == "@Frontend Team ("
+    assert reviewer_cell[5]["user_id"] == "U22222"
+    assert reviewer_cell[6]["text"] == ")"
+
+
+def test_github_team_with_empty_members():
+    """Test GitHub team with no members shows appropriate message."""
+    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+
+    # Create GitHub team with empty members (API fetch failed)
+    github_team = GitHubTeamReviewRequest(
+        team_name="Backend Team",
+        team_slug="backend-team",
+        members=[],  # Empty - fetch failed
+    )
+
+    # Create mock PR with GitHub team reviewer
+    pr = create_mock_pr(
+        repo_name="test-repo",
+        number=123,
+        title="Test PR",
+        reviewers=[],
+        github_team_reviewers=[github_team],
+    )
+    stale_pr = StalePR(pr=pr, staleness_days=5.0)
+
+    # Test the method directly
+    data_row = client._build_table_data_row(stale_pr, [])
+
+    # Reviewers column should show team name with "(no members)"
+    reviewer_cell = data_row[3]["elements"][0]["elements"]
+
+    assert reviewer_cell[0]["text"] == "@Backend Team ("
+    assert reviewer_cell[1]["text"] == "no members)"
+
+
+def test_github_team_with_no_slack_ids():
+    """Test GitHub team members without Slack IDs fall back to @username."""
+    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+
+    # Create GitHub team with members
+    github_team = GitHubTeamReviewRequest(
+        team_name="Backend Team",
+        team_slug="backend-team",
+        members=["alice", "bob"],
+    )
+
+    # Create mock PR with GitHub team reviewer
+    pr = create_mock_pr(
+        repo_name="test-repo",
+        number=123,
+        title="Test PR",
+        reviewers=[],
+        github_team_reviewers=[github_team],
+    )
+    stale_pr = StalePR(pr=pr, staleness_days=5.0)
+
+    # No team members with Slack IDs - should fall back to @username
+    team_members = []
+
+    # Test the method directly
+    data_row = client._build_table_data_row(stale_pr, team_members)
+
+    # Reviewers column should show team name with @usernames
+    reviewer_cell = data_row[3]["elements"][0]["elements"]
+
+    assert reviewer_cell[0]["text"] == "@Backend Team ("
+    assert reviewer_cell[1]["text"] == "@alice"
+    assert reviewer_cell[2]["text"] == ", "
+    assert reviewer_cell[3]["text"] == "@bob"
+    assert reviewer_cell[4]["text"] == ")"
+
+
+def test_github_team_with_complete_deduplication():
+    """Test GitHub team where all individual reviewers are already in team (no trailing newline)."""
+    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+
+    # Create GitHub team with members alice and bob
+    github_team = GitHubTeamReviewRequest(
+        team_name="Backend Team",
+        team_slug="backend-team",
+        members=["alice", "bob"],
+    )
+
+    # Create mock PR where individual reviewers are all in the team (complete deduplication)
+    pr = create_mock_pr(
+        repo_name="test-repo",
+        number=123,
+        title="Test PR",
+        reviewers=["alice", "bob"],  # Both are in the team - will be deduplicated
+        github_team_reviewers=[github_team],
+    )
+    stale_pr = StalePR(pr=pr, staleness_days=5.0)
+
+    team_members = [
+        TeamMember(github_username="alice", slack_user_id="U11111"),
+        TeamMember(github_username="bob", slack_user_id="U22222"),
+    ]
+
+    # Test the method directly
+    data_row = client._build_table_data_row(stale_pr, team_members)
+
+    # Reviewers column should show only team (no trailing newline, no duplicate reviewers)
+    reviewer_cell = data_row[3]["elements"][0]["elements"]
+
+    # Should have: "@Backend Team (" + user(alice) + ", " + user(bob) + ")"
+    # NO trailing newline since all reviewers were deduplicated
+    assert reviewer_cell[0]["text"] == "@Backend Team ("
+    assert reviewer_cell[1]["user_id"] == "U11111"
+    assert reviewer_cell[2]["text"] == ", "
+    assert reviewer_cell[3]["user_id"] == "U22222"
+    assert reviewer_cell[4]["text"] == ")"
+    assert len(reviewer_cell) == 5  # No extra elements (no trailing newline, no duplicates)
