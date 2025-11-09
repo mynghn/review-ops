@@ -58,11 +58,11 @@ Python 3.12: Follow standard conventions
 
 ### Table View UI (Block Kit Slack Formatting)
 - **Unified table format**: All PRs displayed in a single sorted table (replaces category-based sections)
-- **4-column layout**: Staleness emoji, Age, PR details, Reviewers
+- **5-column layout**: Staleness emoji, Age, PR details, Author, Reviewers
 - **Sorting**: PRs sorted by staleness (oldest first) for quick priority identification
 - **Rich text cells**: Uses Slack Block Kit `rich_text` elements (emoji, link, user mentions)
-- **Column alignment**: Center-aligned for emoji/age, left-aligned for PR/reviewers
-- **Bilingual support**: English and Korean translations for table headers
+- **Column alignment**: Center-aligned for emoji/age/author, left-aligned for PR/reviewers
+- **Bilingual support**: English and Korean translations for table headers (Author uses same English expression in both languages)
 - **Automatic truncation**: Max 99 PRs displayed (Slack limit: 100 rows total including header)
 - **Empty state handling**: Shows celebratory message when no PRs need review
 
@@ -77,11 +77,21 @@ Python 3.12: Follow standard conventions
 2. Column header: "Staleness" / "숙성도"
 3. Column header: "Age" / "경과"
 4. Column header: "PR" / "PR"
-5. Column header: "Reviewers" / "리뷰어"
-6. Empty state: "🎉 All clear! No PRs need review" / "🎉 리뷰 대기 중인 PR이 없습니다"
-7. Truncation warning: "⚠️ +{count} more PRs not shown. Check GitHub for full list." / "⚠️ +{count}개 더 있음. 전체 목록은 GitHub에서 확인하세요."
+5. Column header: "Author" / "Author" (same English expression used in both languages)
+6. Column header: "Reviewers" / "리뷰어"
+7. Empty state: "🎉 All clear! No PRs need review" / "🎉 리뷰 대기 중인 PR이 없습니다"
+8. Truncation warning: "⚠️ +{count} more PRs not shown. Check GitHub for full list." / "⚠️ +{count}개 더 있음. 전체 목록은 GitHub에서 확인하세요."
 
 ## Recent Changes
+
+- 004-table-view-ui: Added Author column to table view UI
+  - Updated table layout from 4 columns to 5 columns (Staleness, Age, PR, Author, Reviewers)
+  - Author column uses same English expression for both EN and KO languages
+  - Author column displays user Slack mentions (center-aligned)
+  - Updated `SlackClient._build_table_header_row()` to include Author column
+  - Updated `SlackClient._build_table_data_row()` to add author cell with user mention
+  - Updated `SlackClient.build_blocks()` column_settings to 5 columns
+  - Updated all unit tests to expect 5 columns
 - 004-table-view-ui: Implemented table view UI for Stale PR Board
   - Replaced category-based Block Kit format with unified table view
   - Added `SlackClient._build_table_header_row()` for bilingual table headers

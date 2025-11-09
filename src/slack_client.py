@@ -288,6 +288,7 @@ class SlackClient:
                 {"align": "center"},  # Staleness
                 {"align": "center"},  # Age
                 {"align": "left"},  # PR
+                {"align": "center"},  # Author
                 {"align": "left"},  # Reviewers
             ],
             "rows": table_rows,
@@ -465,11 +466,11 @@ class SlackClient:
         Build table header row with bilingual column labels.
 
         Returns:
-            List of 4 rich_text cells with bold column headers
+            List of 5 rich_text cells with bold column headers
         """
         headers = {
-            "en": ["Staleness", "Age", "PR", "Reviewers"],
-            "ko": ["숙성도", "경과", "PR", "리뷰어"],
+            "en": ["Staleness", "Age", "PR", "Author", "Reviewers"],
+            "ko": ["숙성도", "경과", "PR", "Author", "리뷰어"],
         }
 
         header_texts = headers[self.language]
@@ -498,9 +499,16 @@ class SlackClient:
             team_members: List of team members for Slack user ID mapping
 
         Returns:
-            List of 4 rich_text cells representing one table row
+            List of 5 rich_text cells representing one table row
         """
         pr = stale_pr.pr
+
+        # Create username to slack ID mapping
+        username_to_slack_id = {
+            member.github_username: member.slack_user_id
+            for member in team_members
+            if member.slack_user_id
+        }
 
         # Column 1: Staleness emoji
         emoji_name = self._get_staleness_emoji(stale_pr.category)
@@ -517,11 +525,19 @@ class SlackClient:
         ]
         col_pr = self._build_rich_text_cell(pr_elements)
 
-        # Column 4: Reviewers (including GitHub teams)
+        # Column 4: Author
+        author_slack_id = username_to_slack_id.get(pr.author)
+        if author_slack_id:
+            author_elements = [{"type": "user", "user_id": author_slack_id}]
+        else:
+            author_elements = [{"type": "text", "text": f"@{pr.author}"}]
+        col_author = self._build_rich_text_cell(author_elements)
+
+        # Column 5: Reviewers (including GitHub teams)
         reviewer_elements = self._build_reviewer_elements(pr, team_members)
         col_reviewers = self._build_rich_text_cell(reviewer_elements)
 
-        return [col_staleness, col_age, col_pr, col_reviewers]
+        return [col_staleness, col_age, col_pr, col_author, col_reviewers]
 
     def _get_staleness_emoji(self, category: str) -> str:
         """
