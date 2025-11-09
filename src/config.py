@@ -84,6 +84,16 @@ def load_config() -> Config:
         msg = f"Invalid API_TIMEOUT '{api_timeout_str}'. Must be a positive integer."
         raise ValueError(msg) from e
 
+    gh_search_window_size_str = os.getenv("GH_SEARCH_WINDOW_SIZE", "30")
+    try:
+        gh_search_window_size = int(gh_search_window_size_str)
+        if gh_search_window_size <= 0:
+            msg = "GH_SEARCH_WINDOW_SIZE must be a positive integer"
+            raise ValueError(msg)
+    except ValueError as e:
+        msg = f"Invalid GH_SEARCH_WINDOW_SIZE '{gh_search_window_size_str}'. Must be a positive integer."
+        raise ValueError(msg) from e
+
     gh_search_limit_str = os.getenv("GH_SEARCH_LIMIT", "1000")
     try:
         gh_search_limit = int(gh_search_limit_str)
@@ -169,6 +179,7 @@ def load_config() -> Config:
         slack_webhook_url=slack_webhook_url,
         log_level=log_level,
         api_timeout=api_timeout,
+        gh_search_window_size=gh_search_window_size,
         gh_search_limit=gh_search_limit,
         language=language,
         max_prs_total=max_prs_total,

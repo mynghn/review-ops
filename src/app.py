@@ -6,7 +6,7 @@ import argparse
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 from config import load_config, load_team_members
 from github_client import GitHubClient
@@ -138,7 +138,11 @@ def main() -> int:
         # Fetch PRs involving team members using GitHub Search API
         logger.info(f"Searching for open PRs involving team members in: {config.github_org}")
         team_usernames = {member.github_username for member in team_members}
-        team_prs = github_client.fetch_team_prs(config.github_org, team_usernames)
+        team_prs = github_client.fetch_team_prs(
+            org_name=config.github_org,
+            team_usernames=team_usernames,
+            updated_after=date.today() - timedelta(days=config.gh_search_window_size),
+        )
         logger.info(f"Found {len(team_prs)} open PRs involving team members")
 
         # DEBUG: Print all PRs found

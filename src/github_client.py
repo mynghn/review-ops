@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, date
 
 from github import Auth, Github
 
@@ -327,7 +327,10 @@ class GitHubClient:
                     raise
 
                 # Rate limit errors retry (both primary and secondary)
-                if error_type in ["primary_rate_limit", "secondary_rate_limit"] and attempt < max_retries:
+                if (
+                    error_type in ["primary_rate_limit", "secondary_rate_limit"]
+                    and attempt < max_retries
+                ):
                     self.metrics.retry_attempts += 1
 
                     # Check for Retry-After header
@@ -374,12 +377,16 @@ class GitHubClient:
             raise last_error
         raise RuntimeError("Retry logic failed unexpectedly")
 
-    def fetch_team_prs(self, org_name: str, team_usernames: set[str]) -> list[PullRequest]:
+    def fetch_team_prs(self, org_name: str, team_usernames: set[str], updated_after: date) -> list[PullRequest]:
         """
         Fetch open PRs involving team members using a two-phase approach.
 
         Phase 1 - Search & Deduplicate:
-        - Searches for PRs where team members are authors or requested reviewers
+        - Searches for PRs where
+          - is in unarchived repos, is open, not a draft
+          - is review required
+          - has recent updates after {updated_after} date
+          - team members are requested reviewers
         - Collects all PR keys (repo, number) across all searches
         - Automatically deduplicates using a set to avoid redundant fetches
 
@@ -391,12 +398,10 @@ class GitHubClient:
         - Iterating through all organization repos (slow for large orgs)
         - Fetching details before deduplication (wastes API calls)
 
-        Note: 'reviewed-by' search is omitted as it's less relevant for staleness
-        tracking and would add significant API overhead.
-
         Args:
             org_name: Name of the GitHub organization
             team_usernames: Set of GitHub usernames to search for
+            updated_after: Date to filter PRs updated after
 
         Returns:
             List of PullRequest objects involving team members (drafts excluded)
@@ -410,71 +415,62 @@ class GitHubClient:
 
         # Phase 1: Collect all PR keys from searches (no detail fetching yet)
         pr_keys = set()  # Use set for automatic deduplication
+        for username in team_usernames:
+            logger.debug(f"  Searching for user: {username}")
 
-        # Search types: author and review-requested
-        # Note: Using flags instead of query strings for better reliability
-        search_types = [
-            ("author", "--author"),
-            ("review-requested", "--review-requested"),
-        ]
+            try:
+                result = self._retry_with_backoff(
+                    lambda: self._execute_gh_command(
+                        [
+                            "gh", "search", "prs",
+                            "--owner", org_name,
+                            "--archived=false",
+                            "--state", "open",
+                            "--draft=false",
+                            "--review", "required",
+                            "--review-requested", username,
+                            "--updated", f">={updated_after.isoformat()}",
+                            "--limit", str(self.gh_search_limit),
+                            "--json", "number,repository",
+                        ]
+                    ),
+                    max_retries=self.max_retries,
+                    backoff_base=self.retry_backoff_base,
+                )
 
-        for search_type_name, flag in search_types:
-            logger.info(f"Searching PRs by {search_type_name}...")
+                prs_data = json.loads(result.stdout)
+                logger.debug(f"\tFound {len(prs_data)} PRs for {username}")
 
-            for username in team_usernames:
-                logger.debug(f"  Searching for user: {username}")
+                # Collect PR keys (automatic deduplication via set)
+                for pr_data in prs_data:
+                    repo_full_name = pr_data["repository"]["nameWithOwner"]
+                    pr_number = pr_data["number"]
+                    pr_keys.add((repo_full_name, pr_number))
 
-                try:
-                    result = self._retry_with_backoff(
-                        lambda: self._execute_gh_command(
-                            [
-                                "gh", "search", "prs",
-                                "--owner", org_name,
-                                flag, username,
-                                "--state", "open",
-                                "--limit", str(self.gh_search_limit),
-                                "--json", "number,url,repository"
-                            ]
-                        ),
-                        max_retries=self.max_retries,
-                        backoff_base=self.retry_backoff_base,
-                    )
+                # Add delay between API calls to prevent secondary rate limits
+                if self.api_call_delay > 0:
+                    import time
 
-                    prs_data = json.loads(result.stdout)
-                    logger.debug(
-                        f"    Found {len(prs_data)} PRs for {username} ({search_type_name})"
-                    )
+                    time.sleep(self.api_call_delay)
+                    logger.debug(f"    Waited {self.api_call_delay}s to avoid rate limits")
 
-                    # Collect PR keys (automatic deduplication via set)
-                    for pr_data in prs_data:
-                        repo_full_name = pr_data["repository"]["nameWithOwner"]
-                        pr_number = pr_data["number"]
-                        pr_keys.add((repo_full_name, pr_number))
-
-                    # Add delay between API calls to prevent secondary rate limits
-                    if self.api_call_delay > 0:
-                        import time
-                        time.sleep(self.api_call_delay)
-                        logger.debug(f"    Waited {self.api_call_delay}s to avoid rate limits")
-
-                except subprocess.CalledProcessError as e:
-                    error_msg = (
-                        f"gh search prs failed for {username} ({search_type_name}): {e.stderr}\n"
-                        "Possible causes:\n"
-                        "  - gh CLI not authenticated (run: gh auth login)\n"
-                        "  - Invalid GitHub token (check GH_TOKEN in .env)\n"
-                        "  - Network connectivity issues\n"
-                        "  - GitHub API is down (check https://www.githubstatus.com/)"
-                    )
-                    logger.error(error_msg)
-                    raise ValueError(error_msg) from e
-                except json.JSONDecodeError as e:
-                    error_msg = (
-                        f"Failed to parse gh CLI output for {username} "
-                        f"({search_type_name}): {e}"
-                    )
-                    logger.error(error_msg)
-                    raise ValueError(error_msg) from e
+            except subprocess.CalledProcessError as e:
+                error_msg = (
+                    f"gh search prs failed for {username}: {e.stderr}\n"
+                    "Possible causes:\n"
+                    "  - gh CLI not authenticated (run: gh auth login)\n"
+                    "  - Invalid GitHub token (check GH_TOKEN in .env)\n"
+                    "  - Network connectivity issues\n"
+                    "  - GitHub API is down (check https://www.githubstatus.com/)"
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg) from e
+            except json.JSONDecodeError as e:
+                error_msg = (
+                    f"Failed to parse gh CLI output for {username}: {e}"
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg) from e
 
         logger.info(f"Found {len(pr_keys)} unique PR(s) across all searches")
 
@@ -507,25 +503,8 @@ class GitHubClient:
                 if pr_details:
                     all_prs.append(pr_details)
 
-        # FR-008: Validate that PRs still involve at least one team member
-        validated_prs = []
-        for pr in all_prs:
-            is_team_pr = (
-                pr.author in team_usernames
-                or any(reviewer in team_usernames for reviewer in pr.reviewers)
-            )
-
-            if is_team_pr:
-                validated_prs.append(pr)
-            else:
-                logger.debug(
-                    f"  Skipping PR {pr.repo_name}#{pr.number}: "
-                    f"no current team involvement "
-                    f"(author={pr.author}, reviewers={pr.reviewers})"
-                )
-
-        logger.info(f"Successfully fetched details for {len(validated_prs)} PR(s)")
-        return validated_prs
+        logger.info(f"Successfully fetched details for {len(all_prs)} PR(s)")
+        return all_prs
 
     def _fetch_pr_details(self, repo_full_name: str, pr_number: int) -> PullRequest | None:
         """
@@ -573,8 +552,7 @@ class GitHubClient:
             # Count current approvals from latestReviews
             latest_reviews = pr_data.get("latestReviews", [])
             current_approvals = sum(
-                1 for review in latest_reviews
-                if review.get("state") == "APPROVED"
+                1 for review in latest_reviews if review.get("state") == "APPROVED"
             )
 
             # Get review decision (normalize empty string to None)
@@ -600,8 +578,10 @@ class GitHubClient:
                 base_branch=base_branch,
             )
 
-            logger.debug(f"  Fetched details for {repo_full_name}#{pr_number}: "
-                        f"{current_approvals} approvals, status={review_status}")
+            logger.debug(
+                f"  Fetched details for {repo_full_name}#{pr_number}: "
+                f"{current_approvals} approvals, status={review_status}"
+            )
 
             return pull_request
 
