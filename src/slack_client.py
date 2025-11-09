@@ -243,7 +243,7 @@ class SlackClient:
         self, by_category: dict[str, list[StalePR]], team_members: list[TeamMember]
     ) -> list[dict]:
         """
-        Construct Block Kit blocks for all categories.
+        Construct Block Kit blocks with table format.
 
         Public API for building Block Kit message blocks without sending.
         Useful for dry-run mode, testing, and custom integrations.
@@ -255,37 +255,48 @@ class SlackClient:
         Returns:
             List of Block Kit block dictionaries ready for Slack API
         """
-        # Allocate PRs based on total budget (priority: rotten → aging → fresh)
-        allocated, total_truncated = self._allocate_pr_display(by_category)
+        # Flatten and sort all PRs by staleness descending (stalest first)
+        all_prs = []
+        for category in ["rotten", "aging", "fresh"]:
+            all_prs.extend(by_category.get(category, []))
 
+        all_prs.sort(key=lambda pr: pr.staleness_days, reverse=True)
+
+        # Handle empty state
+        if not all_prs:
+            return self._build_empty_state_blocks()
+
+        # Truncate to display limit (cap at 99 data rows + 1 header = 100 total)
+        display_limit = min(self.max_prs_total, 99)
+        displayed_prs = all_prs[:display_limit]
+        truncated_count = len(all_prs) - len(displayed_prs)
+
+        # Build blocks
         blocks = []
 
-        # Add blocks for each category (rotten, aging, fresh)
-        for category in ["rotten", "aging", "fresh"]:
-            prs_in_category = allocated.get(category, [])
-            if not prs_in_category:
-                continue  # Skip empty categories
+        # Add header block
+        blocks.append(self._build_board_header_block())
 
-            # Add category blocks (no further truncation needed)
-            category_blocks = self._build_category_blocks(
-                category, prs_in_category, team_members
-            )
-            blocks.extend(category_blocks)
+        # Build table block
+        table_rows = [self._build_table_header_row()]
+        for stale_pr in displayed_prs:
+            table_rows.append(self._build_table_data_row(stale_pr, team_members))
 
-            # Add divider after each category (except the last one)
-            blocks.append({"type": "divider"})
+        table_block = {
+            "type": "table",
+            "column_settings": [
+                {"align": "center"},  # Staleness
+                {"align": "center"},  # Age
+                {"align": "left"},  # PR
+                {"align": "left"},  # Reviewers
+            ],
+            "rows": table_rows,
+        }
+        blocks.append(table_block)
 
-        # Remove trailing divider if exists
-        if blocks and blocks[-1].get("type") == "divider":
-            blocks.pop()
-
-        # Add global truncation warning if any PRs were truncated
-        if total_truncated > 0:
-            blocks.append(self._build_truncation_warning(total_truncated))
-
-        # If no blocks were created (all categories empty), return "all clear" message
-        if not blocks:
-            blocks = self._build_empty_state_blocks()
+        # Add truncation warning if needed
+        if truncated_count > 0:
+            blocks.append(self._build_truncation_warning(truncated_count))
 
         return blocks
 
@@ -406,23 +417,31 @@ class SlackClient:
         Returns:
             List of blocks for empty state message
         """
-        if self.language == "ko":
-            header_text = "🎉 모든 PR 리뷰 완료!"
-            message_text = (
-                "축하합니다! 리뷰 대기 중인 PR이 없습니다. "
-                "팀이 모든 코드 리뷰를 완료했습니다!"
-            )
-        else:
-            header_text = "🎉 All Clear!"
-            message_text = (
-                "Great news! No stale PRs found. "
-                "The team is all caught up on code reviews!"
-            )
+        messages = {
+            "en": "🎉 All clear! No PRs need review",
+            "ko": "🎉 리뷰 대기 중인 PR이 없습니다",
+        }
 
         return [
-            {"type": "header", "text": {"type": "plain_text", "text": header_text, "emoji": True}},
-            {"type": "section", "text": {"type": "mrkdwn", "text": message_text}},
+            self._build_board_header_block(),
+            {"type": "section", "text": {"type": "mrkdwn", "text": messages[self.language]}},
         ]
+
+    def _build_board_header_block(self) -> dict:
+        """
+        Build header block with board title.
+
+        Returns:
+            Block Kit header block dictionary
+        """
+        titles = {
+            "en": ":calendar: Code Review Board",
+            "ko": ":calendar: 코드 리뷰 현황판",
+        }
+        return {
+            "type": "header",
+            "text": {"type": "plain_text", "text": titles[self.language], "emoji": True},
+        }
 
     def _escape_mrkdwn(self, text: str) -> str:
         """
@@ -438,3 +457,137 @@ class SlackClient:
         text = text.replace("<", "&lt;")
         text = text.replace(">", "&gt;")
         return text
+
+    # Table View Helper Methods
+
+    def _build_table_header_row(self) -> list[dict]:
+        """
+        Build table header row with bilingual column labels.
+
+        Returns:
+            List of 4 rich_text cells with bold column headers
+        """
+        headers = {
+            "en": ["Staleness", "Age", "PR", "Reviewers"],
+            "ko": ["숙성도", "경과", "PR", "리뷰어"],
+        }
+
+        header_texts = headers[self.language]
+
+        return [
+            {
+                "type": "rich_text",
+                "elements": [
+                    {
+                        "type": "rich_text_section",
+                        "elements": [{"type": "text", "text": text, "style": {"bold": True}}],
+                    }
+                ],
+            }
+            for text in header_texts
+        ]
+
+    def _build_table_data_row(
+        self, stale_pr: StalePR, team_members: list[TeamMember]
+    ) -> list[dict]:
+        """
+        Build table data row for a single PR.
+
+        Args:
+            stale_pr: The stale PR to format
+            team_members: List of team members for Slack user ID mapping
+
+        Returns:
+            List of 4 rich_text cells representing one table row
+        """
+        pr = stale_pr.pr
+
+        # Column 1: Staleness emoji
+        emoji_name = self._get_staleness_emoji(stale_pr.category)
+        col_staleness = self._build_rich_text_cell([{"type": "emoji", "name": emoji_name}])
+
+        # Column 2: Age
+        age_text = f"{int(stale_pr.staleness_days)}d"
+        col_age = self._build_rich_text_cell([{"type": "text", "text": age_text}])
+
+        # Column 3: PR details (repo#number + link)
+        pr_elements = [
+            {"type": "text", "text": f"{pr.repo_name}#{pr.number}\n"},
+            {"type": "link", "text": pr.title, "url": pr.url},
+        ]
+        col_pr = self._build_rich_text_cell(pr_elements)
+
+        # Column 4: Reviewers
+        reviewer_elements = self._build_reviewer_elements(pr.reviewers, team_members)
+        col_reviewers = self._build_rich_text_cell(reviewer_elements)
+
+        return [col_staleness, col_age, col_pr, col_reviewers]
+
+    def _get_staleness_emoji(self, category: str) -> str:
+        """
+        Map category to Slack emoji name.
+
+        Args:
+            category: Category name ('rotten', 'aging', or 'fresh')
+
+        Returns:
+            Slack emoji name (e.g., 'nauseated_face')
+        """
+        emoji_map = {
+            "rotten": "nauseated_face",
+            "aging": "cheese_wedge",
+            "fresh": "sparkles",
+        }
+        return emoji_map[category]
+
+    def _build_rich_text_cell(self, elements: list[dict]) -> dict:
+        """
+        Wrap elements in rich_text cell structure for table cells.
+
+        Args:
+            elements: List of rich_text_section elements (text, emoji, link, user)
+
+        Returns:
+            Rich text cell dictionary
+        """
+        return {
+            "type": "rich_text",
+            "elements": [{"type": "rich_text_section", "elements": elements}],
+        }
+
+    def _build_reviewer_elements(
+        self, reviewers: list[str], team_members: list[TeamMember]
+    ) -> list[dict]:
+        """
+        Build reviewer elements with user mentions separated by newlines.
+
+        Args:
+            reviewers: List of GitHub usernames
+            team_members: List of team members for Slack user ID mapping
+
+        Returns:
+            List of elements (user mentions + newlines, or single dash if empty)
+        """
+        if not reviewers:
+            return [{"type": "text", "text": "-"}]
+
+        username_to_slack_id = {
+            member.github_username: member.slack_user_id
+            for member in team_members
+            if member.slack_user_id
+        }
+
+        elements = []
+        for i, reviewer in enumerate(reviewers):
+            slack_id = username_to_slack_id.get(reviewer)
+            if slack_id:
+                elements.append({"type": "user", "user_id": slack_id})
+            else:
+                # Fallback to @username if no Slack ID
+                elements.append({"type": "text", "text": f"@{reviewer}"})
+
+            # Add newline between reviewers (but not after the last one)
+            if i < len(reviewers) - 1:
+                elements.append({"type": "text", "text": "\n"})
+
+        return elements
