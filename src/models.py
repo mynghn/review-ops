@@ -142,14 +142,8 @@ class Config:
     log_level: str = "INFO"
     """Logging level (DEBUG, INFO, WARNING, ERROR)"""
 
-    api_timeout: int = 30
-    """API request timeout in seconds"""
-
     gh_search_window_size: int = 30
     """Number of days to look back for recently updated PRs"""
-
-    gh_search_limit: int = 1000
-    """Maximum number of PRs to return from each gh search query"""
 
     language: str = "en"
     """Language for Slack message formatting ('en' or 'ko')"""
@@ -157,20 +151,8 @@ class Config:
     max_prs_total: int = 30
     """Total PRs to display across all categories"""
 
-    max_retries: int = 3
-    """Max retry attempts for rate limit errors"""
-
     rate_limit_wait_threshold: int = 300
     """Max auto-wait seconds (5 minutes default)"""
-
-    retry_backoff_base: float = 1.0
-    """Base backoff duration for exponential retry"""
-
-    use_graphql_batch: bool = True
-    """Enable GraphQL batch fetching"""
-
-    api_call_delay: float = 2.0
-    """Delay between API calls in seconds to prevent secondary rate limits"""
 
 
 @dataclass

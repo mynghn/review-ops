@@ -78,14 +78,7 @@ def main() -> int:
             print("=" * 80 + "\n")
 
         # Initialize clients
-        github_client = GitHubClient(
-            token=config.github_token,
-            gh_search_limit=config.gh_search_limit,
-            max_retries=config.max_retries,
-            retry_backoff_base=config.retry_backoff_base,
-            use_graphql_batch=config.use_graphql_batch,
-            api_call_delay=config.api_call_delay,
-        )
+        github_client = GitHubClient(token=config.github_token)
         slack_client = SlackClient(
             webhook_url=config.slack_webhook_url,
             language=config.language,
@@ -229,7 +222,7 @@ def main() -> int:
         metrics = github_client.metrics
         logger.info("API Metrics:")
         logger.info(f"  Search calls: {metrics.search_calls}")
-        if config.use_graphql_batch:
+        if github_client.use_graphql_batch:
             logger.info(f"  GraphQL batch calls: {metrics.graphql_calls}")
             logger.info(f"  REST calls avoided: {metrics.rest_detail_calls}")
             if metrics.graphql_calls > 0:

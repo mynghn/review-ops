@@ -33,7 +33,7 @@ class GitHubClient:
     def __init__(
         self,
         token: str,
-        gh_search_limit: int = 1000,
+        gh_search_limit: int = 100,
         max_retries: int = 3,
         retry_backoff_base: float = 1.0,
         use_graphql_batch: bool = True,
@@ -45,7 +45,7 @@ class GitHubClient:
         Args:
             token: GitHub Personal Access Token with 'repo' and 'read:org' scopes
             gh_search_limit: Maximum number of PRs to return from each gh search query
-                (default: 1000)
+                (default: 100)
             max_retries: Maximum retry attempts for rate limit errors (default: 3)
             retry_backoff_base: Base backoff duration for exponential retry (default: 1.0)
             use_graphql_batch: Enable GraphQL batch fetching for PR details (default: True)

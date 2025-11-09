@@ -74,16 +74,6 @@ def load_config() -> Config:
         )
         raise ValueError(msg)
 
-    api_timeout_str = os.getenv("API_TIMEOUT", "30")
-    try:
-        api_timeout = int(api_timeout_str)
-        if api_timeout <= 0:
-            msg = "API_TIMEOUT must be a positive integer"
-            raise ValueError(msg)
-    except ValueError as e:
-        msg = f"Invalid API_TIMEOUT '{api_timeout_str}'. Must be a positive integer."
-        raise ValueError(msg) from e
-
     gh_search_window_size_str = os.getenv("GH_SEARCH_WINDOW_SIZE", "30")
     try:
         gh_search_window_size = int(gh_search_window_size_str)
@@ -92,16 +82,6 @@ def load_config() -> Config:
             raise ValueError(msg)
     except ValueError as e:
         msg = f"Invalid GH_SEARCH_WINDOW_SIZE '{gh_search_window_size_str}'. Must be a positive integer."
-        raise ValueError(msg) from e
-
-    gh_search_limit_str = os.getenv("GH_SEARCH_LIMIT", "1000")
-    try:
-        gh_search_limit = int(gh_search_limit_str)
-        if gh_search_limit <= 0:
-            msg = "GH_SEARCH_LIMIT must be a positive integer"
-            raise ValueError(msg)
-    except ValueError as e:
-        msg = f"Invalid GH_SEARCH_LIMIT '{gh_search_limit_str}'. Must be a positive integer."
         raise ValueError(msg) from e
 
     language = os.getenv("LANGUAGE", "en").lower()
@@ -123,16 +103,6 @@ def load_config() -> Config:
         msg = f"Invalid MAX_PRS_TOTAL '{max_prs_total_str}'. Must be between 10 and 100."
         raise ValueError(msg) from e
 
-    max_retries_str = os.getenv("MAX_RETRIES", "3")
-    try:
-        max_retries = int(max_retries_str)
-        if not 1 <= max_retries <= 5:
-            msg = "MAX_RETRIES must be between 1 and 5"
-            raise ValueError(msg)
-    except ValueError as e:
-        msg = f"Invalid MAX_RETRIES '{max_retries_str}'. Must be between 1 and 5."
-        raise ValueError(msg) from e
-
     rate_limit_wait_threshold_str = os.getenv("RATE_LIMIT_WAIT_THRESHOLD", "300")
     try:
         rate_limit_wait_threshold = int(rate_limit_wait_threshold_str)
@@ -146,30 +116,6 @@ def load_config() -> Config:
         )
         raise ValueError(msg) from e
 
-    retry_backoff_base_str = os.getenv("RETRY_BACKOFF_BASE", "1.0")
-    try:
-        retry_backoff_base = float(retry_backoff_base_str)
-        if not 0.5 <= retry_backoff_base <= 2.0:
-            msg = "RETRY_BACKOFF_BASE must be between 0.5 and 2.0"
-            raise ValueError(msg)
-    except ValueError as e:
-        msg = f"Invalid RETRY_BACKOFF_BASE '{retry_backoff_base_str}'. Must be between 0.5 and 2.0."
-        raise ValueError(msg) from e
-
-    use_graphql_batch_str = os.getenv("USE_GRAPHQL_BATCH", "true").lower()
-    use_graphql_batch = use_graphql_batch_str in {"true", "1", "yes", "on"}
-
-    # API call delay to prevent secondary rate limits (in seconds)
-    api_call_delay_str = os.getenv("API_CALL_DELAY", "2.0")
-    try:
-        api_call_delay = float(api_call_delay_str)
-        if not 0.0 <= api_call_delay <= 10.0:
-            msg = "API_CALL_DELAY must be between 0.0 and 10.0"
-            raise ValueError(msg)
-    except ValueError as e:
-        msg = f"Invalid API_CALL_DELAY '{api_call_delay_str}'. Must be between 0.0 and 10.0."
-        raise ValueError(msg) from e
-
     # Check for gh CLI availability
     _check_gh_cli_available()
 
@@ -178,16 +124,10 @@ def load_config() -> Config:
         github_org=github_org,
         slack_webhook_url=slack_webhook_url,
         log_level=log_level,
-        api_timeout=api_timeout,
         gh_search_window_size=gh_search_window_size,
-        gh_search_limit=gh_search_limit,
         language=language,
         max_prs_total=max_prs_total,
-        max_retries=max_retries,
         rate_limit_wait_threshold=rate_limit_wait_threshold,
-        retry_backoff_base=retry_backoff_base,
-        use_graphql_batch=use_graphql_batch,
-        api_call_delay=api_call_delay,
     )
 
 
