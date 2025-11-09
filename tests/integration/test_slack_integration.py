@@ -197,26 +197,25 @@ def test_post_stale_pr_summary_full_message_structure(
         blocks = payload["blocks"]
         assert isinstance(blocks, list)
 
-        # Validate block types
+        # Validate block types - table format has header + table + optional context
         block_types = [block.get("type") for block in blocks]
-        assert "header" in block_types  # Should have category headers
-        assert "section" in block_types  # Should have PR sections
-        assert "divider" in block_types or len(block_types) == 2  # Dividers between categories
+        assert "header" in block_types  # Should have board header
+        assert "table" in block_types  # Should have table with PRs
 
         # Validate each block has required fields
         for block in blocks:
             assert "type" in block
-            assert block["type"] in ["header", "section", "divider", "context"]
+            assert block["type"] in ["header", "table", "context"]
 
             if block["type"] == "header":
                 assert "text" in block
                 assert block["text"]["type"] == "plain_text"
                 assert "text" in block["text"]
 
-            elif block["type"] == "section":
-                assert "text" in block
-                assert block["text"]["type"] == "mrkdwn"
-                assert "text" in block["text"]
+            elif block["type"] == "table":
+                assert "rows" in block
+                assert isinstance(block["rows"], list)
+                assert len(block["rows"]) > 0  # Should have at least header row
 
         # Ensure block count is under Slack's 50-block limit
         assert len(blocks) <= 50

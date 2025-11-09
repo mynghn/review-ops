@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
@@ -18,6 +18,20 @@ class TeamMember:
     """Slack user ID for @mentions (e.g., 'U1234567890').
     If None, falls back to plain text @github_username
     """
+
+
+@dataclass
+class GitHubTeamReviewRequest:
+    """A GitHub team review request with resolved member list."""
+
+    team_name: str
+    """Display name of the GitHub team (e.g., 'Backend Team')"""
+
+    team_slug: str
+    """URL-safe slug of the GitHub team (e.g., 'backend-team')"""
+
+    members: list[str]
+    """List of GitHub usernames of team members"""
 
 
 @dataclass
@@ -64,6 +78,9 @@ class PullRequest:
 
     base_branch: str
     """Name of the target branch for this PR (e.g., 'main', 'develop')"""
+
+    github_team_reviewers: list[GitHubTeamReviewRequest] = field(default_factory=list)
+    """List of GitHub team review requests with resolved members"""
 
     @property
     def is_draft(self) -> bool:

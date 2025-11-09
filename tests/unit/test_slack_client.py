@@ -311,39 +311,40 @@ class TestBuildBlocks:
         by_category = {"rotten": [], "aging": [], "fresh": []}
         blocks = slack_client_en.build_blocks(by_category, sample_team)
 
-        # Should return "all clear" message with header + section
+        # Should return "all clear" message with header + section (table view format)
         assert len(blocks) == 2
         assert blocks[0]["type"] == "header"
-        assert blocks[0]["text"]["text"] == "🎉 All Clear!"
+        assert blocks[0]["text"]["text"] == ":calendar: Code Review Board"
         assert blocks[1]["type"] == "section"
-        assert "Great news!" in blocks[1]["text"]["text"]
-        assert "No stale PRs found" in blocks[1]["text"]["text"]
+        assert "🎉 All clear! No PRs need review" in blocks[1]["text"]["text"]
 
     def test_build_blocks_empty_categories_ko(self, slack_client_ko, sample_team):
         """Test building blocks with empty categories returns 'all clear' message in Korean."""
         by_category = {"rotten": [], "aging": [], "fresh": []}
         blocks = slack_client_ko.build_blocks(by_category, sample_team)
 
-        # Should return Korean "all clear" message
+        # Should return Korean "all clear" message (table view format)
         assert len(blocks) == 2
         assert blocks[0]["type"] == "header"
-        assert blocks[0]["text"]["text"] == "🎉 모든 PR 리뷰 완료!"
+        assert blocks[0]["text"]["text"] == ":calendar: 코드 리뷰 현황판"
         assert blocks[1]["type"] == "section"
-        assert "축하합니다!" in blocks[1]["text"]["text"]
-        assert "리뷰 대기 중인 PR이 없습니다" in blocks[1]["text"]["text"]
+        assert "🎉 리뷰 대기 중인 PR이 없습니다" in blocks[1]["text"]["text"]
 
     def test_build_blocks_single_category(self, slack_client_en, sample_stale_pr, sample_team):
-        """Test building blocks with single category."""
+        """Test building blocks with single category (table view format)."""
         by_category = {"rotten": [sample_stale_pr], "aging": [], "fresh": []}
         blocks = slack_client_en.build_blocks(by_category, sample_team)
 
-        # Should have header + PR section, no divider (last one removed)
+        # Should have board header + table (table view format)
         assert len(blocks) == 2
         assert blocks[0]["type"] == "header"
-        assert blocks[1]["type"] == "section"
+        assert blocks[0]["text"]["text"] == ":calendar: Code Review Board"
+        assert blocks[1]["type"] == "table"
+        # Table should have 1 header row + 1 data row
+        assert len(blocks[1]["rows"]) == 2
 
     def test_build_blocks_multiple_categories(self, slack_client_en, sample_stale_pr, sample_team):
-        """Test building blocks with multiple categories."""
+        """Test building blocks with multiple categories (table view format)."""
         by_category = {
             "rotten": [sample_stale_pr],
             "aging": [sample_stale_pr],
@@ -351,21 +352,26 @@ class TestBuildBlocks:
         }
         blocks = slack_client_en.build_blocks(by_category, sample_team)
 
-        # Should have: (header + section) × 3 + dividers between (2)
-        assert len(blocks) == 8  # 3*2 blocks + 2 dividers
-        assert blocks[2]["type"] == "divider"
-        assert blocks[5]["type"] == "divider"
+        # Should have: board header + table (all PRs in single table)
+        assert len(blocks) == 2
+        assert blocks[0]["type"] == "header"
+        assert blocks[1]["type"] == "table"
+        # Table should have 1 header row + 3 data rows
+        assert len(blocks[1]["rows"]) == 4
 
     def test_build_blocks_skips_empty_categories(
         self, slack_client_en, sample_stale_pr, sample_team
     ):
-        """Test that empty categories are skipped."""
+        """Test that empty categories are skipped (table view format)."""
         by_category = {"rotten": [], "aging": [sample_stale_pr], "fresh": []}
         blocks = slack_client_en.build_blocks(by_category, sample_team)
 
-        # Only aging should be included
-        assert len(blocks) == 2  # header + section
-        assert blocks[0]["text"]["text"] == "🧀 Aging PRs"
+        # Should have board header + table with single PR
+        assert len(blocks) == 2
+        assert blocks[0]["type"] == "header"
+        assert blocks[0]["text"]["text"] == ":calendar: Code Review Board"
+        assert blocks[1]["type"] == "table"
+        assert len(blocks[1]["rows"]) == 2  # 1 header + 1 data row
 
 
 class TestPostStalePRSummary:
@@ -400,7 +406,7 @@ class TestPostStalePRSummary:
     def test_post_stale_pr_summary_groups_by_category(
         self, slack_client_en, sample_team
     ):
-        """Test that PRs are correctly grouped by category."""
+        """Test that PRs are correctly displayed in table view format."""
         pr_rotten = PullRequest(
             repo_name="repo",
             number=1,
@@ -440,24 +446,25 @@ class TestPostStalePRSummary:
 
             slack_client_en.post_stale_pr_summary(stale_prs, sample_team)
 
-            # Verify blocks were sent
+            # Verify blocks were sent with table format
             call_args = mock_post.call_args
             blocks = call_args[1]["json"]["blocks"]
 
-            # Find header blocks
-            headers = [b for b in blocks if b["type"] == "header"]
-            header_texts = [h["text"]["text"] for h in headers]
-
-            assert "🤢 Rotten PRs" in header_texts
-            assert "✨ Fresh PRs" in header_texts
+            # Should have board header + table
+            assert len(blocks) == 2
+            assert blocks[0]["type"] == "header"
+            assert blocks[0]["text"]["text"] == ":calendar: Code Review Board"
+            assert blocks[1]["type"] == "table"
+            # Table should have 1 header + 2 data rows (sorted by staleness descending)
+            assert len(blocks[1]["rows"]) == 3
 
 
 class TestTruncation:
     """Tests for truncation functionality."""
 
     def test_truncation_applies_at_limit(self, slack_client_en, sample_team):
-        """Test that truncation applies at MAX_PRS_PER_CATEGORY."""
-        # Create 20 PRs (more than limit of 15)
+        """Test that truncation applies at max_prs_total (table view format)."""
+        # Create 20 PRs (more than limit of 10)
         prs = []
         for i in range(20):
             pr = PullRequest(
@@ -485,14 +492,17 @@ class TestTruncation:
         )
         blocks = slack_client_limited.build_blocks(by_category, sample_team)
 
-        # Find section blocks (PR entries)
-        sections = [b for b in blocks if b["type"] == "section"]
-        assert len(sections) == 10  # Should be truncated to max_prs_total
+        # Should have: board header + table + truncation warning
+        assert len(blocks) == 3
+        assert blocks[0]["type"] == "header"
+        assert blocks[1]["type"] == "table"
+
+        # Table should have 11 rows: 1 header + 10 data rows (truncated)
+        assert len(blocks[1]["rows"]) == 11
 
         # Find context block (truncation warning)
-        contexts = [b for b in blocks if b["type"] == "context"]
-        assert len(contexts) == 1
-        warning_text = contexts[0]["elements"][0]["text"]
+        assert blocks[2]["type"] == "context"
+        warning_text = blocks[2]["elements"][0]["text"]
         assert "+10" in warning_text  # 20 - 10 = 10
 
 

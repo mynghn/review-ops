@@ -46,6 +46,7 @@ def sample_pr() -> PullRequest:
         current_approvals=0,
         review_status="REVIEW_REQUIRED",
         base_branch="main",
+        github_team_reviewers=[],  # No GitHub team reviewers for this fixture
     )
 
 
@@ -64,6 +65,7 @@ def sample_pr_with_approvals() -> PullRequest:
         current_approvals=2,
         review_status="APPROVED",
         base_branch="main",
+        github_team_reviewers=[],  # No GitHub team reviewers for this fixture
     )
 
 
@@ -82,6 +84,7 @@ def sample_draft_pr() -> PullRequest:
         current_approvals=0,
         review_status=None,
         base_branch="main",
+        github_team_reviewers=[],  # No GitHub team reviewers for this fixture
     )
 
 

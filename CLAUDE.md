@@ -6,6 +6,8 @@ Auto-generated from all feature plans. Last updated: 2025-10-31
 - Python 3.12 (existing) + requests (existing), Slack Block Kit (JSON format - no new libraries)
 - N/A (stateless message generation from team_members.json + GitHub API)
 - N/A (stateless CLI application, in-memory PR deduplication only) (003-github-rate-limit-handling)
+- Python 3.12 (existing) + requests (existing), Slack Block Kit API (JSON format - no new libraries) (004-table-view-ui)
+- N/A (stateless CLI application, in-memory processing only) (004-table-view-ui)
 
 ## Project Structure
 
@@ -54,11 +56,15 @@ Python 3.12: Follow standard conventions
 
 ## Features
 
-### Block Kit Slack Formatting
-- Visual enhancement using Slack Block Kit (headers, sections, dividers, context blocks)
-- Supports English and Korean languages
-- Automatic truncation (15 PRs per category max)
-- Markdown escaping for safe display
+### Table View UI (Block Kit Slack Formatting)
+- **Unified table format**: All PRs displayed in a single sorted table (replaces category-based sections)
+- **5-column layout**: Staleness emoji, Age, PR details, Author, Reviewers
+- **Sorting**: PRs sorted by staleness (oldest first) for quick priority identification
+- **Rich text cells**: Uses Slack Block Kit `rich_text` elements (emoji, link, user mentions)
+- **Column alignment**: Center-aligned for emoji/age/author, left-aligned for PR/reviewers
+- **Bilingual support**: English and Korean translations for table headers (Author uses same English expression in both languages)
+- **Automatic truncation**: Max 99 PRs displayed (Slack limit: 100 rows total including header)
+- **Empty state handling**: Shows celebratory message when no PRs need review
 
 ### Language Support
 - **English (`en`)**: Default language
@@ -66,24 +72,42 @@ Python 3.12: Follow standard conventions
 - Configure via `LANGUAGE` environment variable in `.env`
 - Supported values: `'en'` or `'ko'` (case-insensitive)
 
-### Translation Strings (7 pairs)
-1. Category headers: "Rotten PRs" / "PR 부패 중..."
-2. Category headers: "Aging PRs" / "PR 숙성 중..."
-3. Category headers: "Fresh PRs" / "갓 태어난 PR"
-4. Age format: "{days} days old" / "{days}일 묵음"
-5. Review count: "{count} reviews pending" / "리뷰 {count}개 대기중"
-6. Truncation warning: "+{count} more PRs not shown" / "+{count}개 더 있음"
-7. Empty state: "No PRs in this category" / "이 카테고리에 PR 없음"
+### Translation Strings (Table View)
+1. Board title: ":calendar: Code Review Board" / ":calendar: 코드 리뷰 현황판"
+2. Column header: "Staleness" / "숙성도"
+3. Column header: "Age" / "경과"
+4. Column header: "PR" / "PR"
+5. Column header: "Author" / "Author" (same English expression used in both languages)
+6. Column header: "Reviewers" / "리뷰어"
+7. Empty state: "🎉 All clear! No PRs need review" / "🎉 리뷰 대기 중인 PR이 없습니다"
+8. Truncation warning: "⚠️ +{count} more PRs not shown. Check GitHub for full list." / "⚠️ +{count}개 더 있음. 전체 목록은 GitHub에서 확인하세요."
 
 ## Recent Changes
+
+- 004-table-view-ui: Added Author column to table view UI
+  - Updated table layout from 4 columns to 5 columns (Staleness, Age, PR, Author, Reviewers)
+  - Author column uses same English expression for both EN and KO languages
+  - Author column displays user Slack mentions (center-aligned)
+  - Updated `SlackClient._build_table_header_row()` to include Author column
+  - Updated `SlackClient._build_table_data_row()` to add author cell with user mention
+  - Updated `SlackClient.build_blocks()` column_settings to 5 columns
+  - Updated all unit tests to expect 5 columns
+- 004-table-view-ui: Implemented table view UI for Stale PR Board
+  - Replaced category-based Block Kit format with unified table view
+  - Added `SlackClient._build_table_header_row()` for bilingual table headers
+  - Added `SlackClient._build_table_data_row()` for PR row generation
+  - Added `SlackClient._build_board_header_block()` for board title
+  - Added `SlackClient._get_staleness_emoji()` for emoji mapping
+  - Added `SlackClient._build_rich_text_cell()` for table cell construction
+  - Added `SlackClient._build_reviewer_elements()` for reviewer mentions
+  - Updated `SlackClient.build_blocks()` to generate table format
+  - Updated `SlackClient._build_empty_state_blocks()` for simplified empty state
+  - Created 4 new unit tests for table view functionality
+  - Code coverage: 73% for slack_client.py (maintained baseline)
 - 003-github-rate-limit-handling: Added Python 3.12 (existing)
-- 003-github-rate-limit-handling: Added Python 3.12 (existing)
-- 002-ui-enhance-on-stale-pr-board: Implemented Block Kit formatting with bilingual support (EN/KO)
   - Added `SlackClient.post_stale_pr_summary()` method for Block Kit messages
   - Added language parameter to `SlackClient.__init__()`
   - Added `LANGUAGE` config validation in `config.py`
-  - Created 35 unit tests for Block Kit functionality
-  - All 86 tests passing, 73% code coverage
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

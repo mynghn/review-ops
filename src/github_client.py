@@ -6,11 +6,16 @@ import json
 import logging
 import os
 import subprocess
-from datetime import datetime, date
+from datetime import date, datetime
 
 from github import Auth, Github
 
-from models import APICallMetrics, PullRequest, RateLimitStatus
+from models import (
+    APICallMetrics,
+    GitHubTeamReviewRequest,
+    PullRequest,
+    RateLimitStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -284,6 +289,46 @@ class GitHubClient:
             timeout=timeout,
         )
 
+    def _fetch_github_team_members(self, org: str, team_slug: str) -> list[str]:
+        """
+        Fetch GitHub team members using the GitHub API.
+
+        Args:
+            org: GitHub organization name
+            team_slug: URL-safe team slug (e.g., 'backend-team')
+
+        Returns:
+            List of GitHub usernames (members of the team)
+            Returns empty list if team fetch fails (logs warning)
+        """
+        try:
+            result = subprocess.run(
+                ["gh", "api", f"/orgs/{org}/teams/{team_slug}/members", "--jq", ".[].login"],
+                capture_output=True,
+                text=True,
+                check=True,
+                env=os.environ,
+                timeout=10,
+            )
+
+            # Parse usernames from output (one per line)
+            members = [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
+            logger.debug(f"  Fetched {len(members)} members for team {org}/{team_slug}")
+            return members
+
+        except subprocess.CalledProcessError as e:
+            logger.warning(
+                f"Failed to fetch members for GitHub team {org}/{team_slug}: {e.stderr}. "
+                f"Team will be shown without expansion."
+            )
+            return []
+        except subprocess.TimeoutExpired:
+            logger.warning(
+                f"Timeout fetching members for GitHub team {org}/{team_slug}. "
+                f"Team will be shown without expansion."
+            )
+            return []
+
     def _retry_with_backoff(
         self,
         func: callable,
@@ -545,9 +590,28 @@ class GitHubClient:
             created_at = datetime.fromisoformat(pr_data["createdAt"].replace("Z", "+00:00"))
             ready_at = created_at  # For non-draft PRs, use created_at
 
-            # Extract requested reviewers (filter out team review requests)
+            # Extract requested reviewers (both individual users and GitHub teams)
             review_requests = pr_data.get("reviewRequests", [])
             reviewers = [req["login"] for req in review_requests if req.get("login")]
+
+            # Extract GitHub team review requests and resolve members
+            github_team_reviewers = []
+            org = repo_full_name.split("/")[0] if "/" in repo_full_name else None
+
+            for req in review_requests:
+                # Team requests don't have 'login', but have 'name' and 'slug'
+                if not req.get("login") and req.get("slug") and org:
+                    team_name = req.get("name", req.get("slug"))
+                    team_slug = req["slug"]
+                    members = self._fetch_github_team_members(org, team_slug)
+
+                    github_team_reviewers.append(
+                        GitHubTeamReviewRequest(
+                            team_name=team_name,
+                            team_slug=team_slug,
+                            members=members,
+                        )
+                    )
 
             # Count current approvals from latestReviews
             latest_reviews = pr_data.get("latestReviews", [])
@@ -576,6 +640,7 @@ class GitHubClient:
                 current_approvals=current_approvals,
                 review_status=review_status,
                 base_branch=base_branch,
+                github_team_reviewers=github_team_reviewers,
             )
 
             logger.debug(
@@ -642,6 +707,10 @@ class GitHubClient:
                             requestedReviewer {{
                                 ... on User {{
                                     login
+                                }}
+                                ... on Team {{
+                                    name
+                                    slug
                                 }}
                             }}
                         }}
@@ -719,13 +788,33 @@ class GitHubClient:
                     # Since GraphQL doesn't easily expose this, use created_at
                     ready_at = created_at
 
-                    # Extract reviewers from reviewRequests
+                    # Extract reviewers from reviewRequests (both individual users and GitHub teams)
                     review_requests = pr_data.get("reviewRequests", {}).get("nodes", [])
                     reviewers = [
                         req["requestedReviewer"]["login"]
                         for req in review_requests
                         if req.get("requestedReviewer", {}).get("login")
                     ]
+
+                    # Extract GitHub team review requests and resolve members
+                    github_team_reviewers = []
+                    for req in review_requests:
+                        requested_reviewer = req.get("requestedReviewer", {})
+                        # Team requests have 'name' and 'slug' but not 'login'
+                        if not requested_reviewer.get("login") and requested_reviewer.get("slug"):
+                            team_name = requested_reviewer.get(
+                                "name", requested_reviewer.get("slug")
+                            )
+                            team_slug = requested_reviewer["slug"]
+                            members = self._fetch_github_team_members(owner, team_slug)
+
+                            github_team_reviewers.append(
+                                GitHubTeamReviewRequest(
+                                    team_name=team_name,
+                                    team_slug=team_slug,
+                                    members=members,
+                                )
+                            )
 
                     # Count approvals from reviews
                     reviews = pr_data.get("reviews", {}).get("nodes", [])
@@ -756,6 +845,7 @@ class GitHubClient:
                         current_approvals=current_approvals,
                         review_status=review_status,
                         base_branch=base_branch,
+                        github_team_reviewers=github_team_reviewers,
                     )
 
                     pull_requests.append(pull_request)

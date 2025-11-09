@@ -1,0 +1,40 @@
+{
+  "english": {
+    "blocks": [
+      {
+        "type": "header",
+        "text": {
+          "type": "plain_text",
+          "text": ":calendar: Code Review Board",
+          "emoji": true
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "🎉 All clear! No PRs need review"
+        }
+      }
+    ]
+  },
+  "korean": {
+    "blocks": [
+      {
+        "type": "header",
+        "text": {
+          "type": "plain_text",
+          "text": ":calendar: 코드 리뷰 현황판",
+          "emoji": true
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "🎉 리뷰 대기 중인 PR이 없습니다"
+        }
+      }
+    ]
+  }
+}
