@@ -5,6 +5,7 @@ Auto-generated from all feature plans. Last updated: 2025-10-31
 ## Active Technologies
 - Python 3.12 (existing) + requests (existing), Slack Block Kit (JSON format - no new libraries)
 - N/A (stateless message generation from team_members.json + GitHub API)
+- N/A (stateless CLI application, in-memory PR deduplication only) (003-github-rate-limit-handling)
 
 ## Project Structure
 
@@ -75,13 +76,14 @@ Python 3.12: Follow standard conventions
 7. Empty state: "No PRs in this category" / "이 카테고리에 PR 없음"
 
 ## Recent Changes
+- 003-github-rate-limit-handling: Added Python 3.12 (existing)
+- 003-github-rate-limit-handling: Added Python 3.12 (existing)
 - 002-ui-enhance-on-stale-pr-board: Implemented Block Kit formatting with bilingual support (EN/KO)
   - Added `SlackClient.post_stale_pr_summary()` method for Block Kit messages
   - Added language parameter to `SlackClient.__init__()`
   - Added `LANGUAGE` config validation in `config.py`
   - Created 35 unit tests for Block Kit functionality
   - All 86 tests passing, 73% code coverage
-- 001-stale-pr-board: Initial implementation with Python 3.12
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

@@ -71,9 +71,10 @@ class TestSlackClientInitialization:
         client = SlackClient(webhook_url="https://hooks.slack.com/test")
         assert client.language == "en"
 
-    def test_max_prs_per_category_constant(self):
-        """Test MAX_PRS_PER_CATEGORY constant exists."""
-        assert SlackClient.MAX_PRS_PER_CATEGORY == 15
+    def test_max_prs_total_default(self):
+        """Test max_prs_total default is set correctly."""
+        client = SlackClient(webhook_url="https://hooks.slack.com/services/TEST/TEST/TEST")
+        assert client.max_prs_total == 30
 
 
 class TestEscapeMrkdwn:
@@ -475,14 +476,210 @@ class TestTruncation:
             prs.append(StalePR(pr=pr, staleness_days=5.0))
 
         by_category = {"aging": prs, "rotten": [], "fresh": []}
-        blocks = slack_client_en.build_blocks(by_category, sample_team)
+
+        # Test with max_prs_total=10 to trigger truncation
+        slack_client_limited = SlackClient(
+            webhook_url="https://hooks.slack.com/test",
+            language="en",
+            max_prs_total=10
+        )
+        blocks = slack_client_limited.build_blocks(by_category, sample_team)
 
         # Find section blocks (PR entries)
         sections = [b for b in blocks if b["type"] == "section"]
-        assert len(sections) == 15  # Should be truncated to MAX_PRS_PER_CATEGORY
+        assert len(sections) == 10  # Should be truncated to max_prs_total
 
         # Find context block (truncation warning)
         contexts = [b for b in blocks if b["type"] == "context"]
         assert len(contexts) == 1
         warning_text = contexts[0]["elements"][0]["text"]
-        assert "+5" in warning_text  # 20 - 15 = 5
+        assert "+10" in warning_text  # 20 - 10 = 10
+
+
+class TestPRAllocationLogic:
+    """Tests for priority-based PR allocation logic."""
+
+    def test_allocate_pr_display_prioritizes_staleness(self):
+        """Test that PRs are allocated by staleness priority: rotten > aging > fresh."""
+        # Create PRs for each category
+        rotten_prs = []
+        for i in range(15):
+            pr = PullRequest(
+                repo_name="repo",
+                number=i,
+                title=f"Rotten PR {i}",
+                author="alice",
+                reviewers=[],
+                url=f"https://github.com/test/repo/pull/{i}",
+                created_at=datetime(2025, 10, 1, 10, 0, 0, tzinfo=UTC),
+                ready_at=datetime(2025, 10, 1, 10, 0, 0, tzinfo=UTC),
+                current_approvals=0,
+                review_status=None,
+                base_branch="main",
+            )
+            rotten_prs.append(StalePR(pr=pr, staleness_days=15.0))
+
+        aging_prs = []
+        for i in range(100, 115):  # 15 PRs
+            pr = PullRequest(
+                repo_name="repo",
+                number=i,
+                title=f"Aging PR {i}",
+                author="bob",
+                reviewers=[],
+                url=f"https://github.com/test/repo/pull/{i}",
+                created_at=datetime(2025, 10, 15, 10, 0, 0, tzinfo=UTC),
+                ready_at=datetime(2025, 10, 15, 10, 0, 0, tzinfo=UTC),
+                current_approvals=0,
+                review_status=None,
+                base_branch="main",
+            )
+            aging_prs.append(StalePR(pr=pr, staleness_days=5.0))
+
+        fresh_prs = []
+        for i in range(200, 215):  # 15 PRs
+            pr = PullRequest(
+                repo_name="repo",
+                number=i,
+                title=f"Fresh PR {i}",
+                author="charlie",
+                reviewers=[],
+                url=f"https://github.com/test/repo/pull/{i}",
+                created_at=datetime(2025, 10, 29, 10, 0, 0, tzinfo=UTC),
+                ready_at=datetime(2025, 10, 29, 10, 0, 0, tzinfo=UTC),
+                current_approvals=0,
+                review_status=None,
+                base_branch="main",
+            )
+            fresh_prs.append(StalePR(pr=pr, staleness_days=1.0))
+
+        by_category = {"rotten": rotten_prs, "aging": aging_prs, "fresh": fresh_prs}
+
+        # Test with max_prs_total=20 (less than 45 total PRs)
+        client = SlackClient(
+            webhook_url="https://hooks.slack.com/test", language="en", max_prs_total=20
+        )
+
+        allocated, truncated_count = client._allocate_pr_display(by_category)
+
+        # Should show all 15 rotten PRs (highest priority)
+        assert len(allocated["rotten"]) == 15
+
+        # Should show 5 aging PRs (remaining budget: 20 - 15 = 5)
+        assert len(allocated["aging"]) == 5
+
+        # Should show 0 fresh PRs (budget exhausted)
+        assert len(allocated["fresh"]) == 0
+
+        # Should have truncated 25 PRs (45 total - 20 displayed)
+        assert truncated_count == 25
+
+    def test_allocate_pr_display_with_enough_budget(self):
+        """Test allocation when budget is sufficient for all PRs."""
+        # Create small number of PRs
+        rotten_prs = []
+        for i in range(5):
+            pr = PullRequest(
+                repo_name="repo",
+                number=i,
+                title=f"Rotten PR {i}",
+                author="alice",
+                reviewers=[],
+                url=f"https://github.com/test/repo/pull/{i}",
+                created_at=datetime(2025, 10, 1, 10, 0, 0, tzinfo=UTC),
+                ready_at=datetime(2025, 10, 1, 10, 0, 0, tzinfo=UTC),
+                current_approvals=0,
+                review_status=None,
+                base_branch="main",
+            )
+            rotten_prs.append(StalePR(pr=pr, staleness_days=15.0))
+
+        aging_prs = []
+        for i in range(100, 110):  # 10 PRs
+            pr = PullRequest(
+                repo_name="repo",
+                number=i,
+                title=f"Aging PR {i}",
+                author="bob",
+                reviewers=[],
+                url=f"https://github.com/test/repo/pull/{i}",
+                created_at=datetime(2025, 10, 15, 10, 0, 0, tzinfo=UTC),
+                ready_at=datetime(2025, 10, 15, 10, 0, 0, tzinfo=UTC),
+                current_approvals=0,
+                review_status=None,
+                base_branch="main",
+            )
+            aging_prs.append(StalePR(pr=pr, staleness_days=5.0))
+
+        fresh_prs = []
+        for i in range(200, 205):  # 5 PRs
+            pr = PullRequest(
+                repo_name="repo",
+                number=i,
+                title=f"Fresh PR {i}",
+                author="charlie",
+                reviewers=[],
+                url=f"https://github.com/test/repo/pull/{i}",
+                created_at=datetime(2025, 10, 29, 10, 0, 0, tzinfo=UTC),
+                ready_at=datetime(2025, 10, 29, 10, 0, 0, tzinfo=UTC),
+                current_approvals=0,
+                review_status=None,
+                base_branch="main",
+            )
+            fresh_prs.append(StalePR(pr=pr, staleness_days=1.0))
+
+        by_category = {"rotten": rotten_prs, "aging": aging_prs, "fresh": fresh_prs}
+
+        # Test with max_prs_total=30 (more than 20 total PRs)
+        client = SlackClient(
+            webhook_url="https://hooks.slack.com/test", language="en", max_prs_total=30
+        )
+
+        allocated, truncated_count = client._allocate_pr_display(by_category)
+
+        # Should show all PRs (budget sufficient)
+        assert len(allocated["rotten"]) == 5
+        assert len(allocated["aging"]) == 10
+        assert len(allocated["fresh"]) == 5
+
+        # No truncation
+        assert truncated_count == 0
+
+    def test_allocate_pr_display_empty_categories(self):
+        """Test allocation with empty categories."""
+        rotten_prs = []
+        aging_prs = []
+        for i in range(25):
+            pr = PullRequest(
+                repo_name="repo",
+                number=i,
+                title=f"Aging PR {i}",
+                author="bob",
+                reviewers=[],
+                url=f"https://github.com/test/repo/pull/{i}",
+                created_at=datetime(2025, 10, 15, 10, 0, 0, tzinfo=UTC),
+                ready_at=datetime(2025, 10, 15, 10, 0, 0, tzinfo=UTC),
+                current_approvals=0,
+                review_status=None,
+                base_branch="main",
+            )
+            aging_prs.append(StalePR(pr=pr, staleness_days=5.0))
+
+        fresh_prs = []
+
+        by_category = {"rotten": rotten_prs, "aging": aging_prs, "fresh": fresh_prs}
+
+        # Test with max_prs_total=20
+        client = SlackClient(
+            webhook_url="https://hooks.slack.com/test", language="en", max_prs_total=20
+        )
+
+        allocated, truncated_count = client._allocate_pr_display(by_category)
+
+        # Rotten is empty, so full budget goes to aging
+        assert len(allocated["rotten"]) == 0
+        assert len(allocated["aging"]) == 20
+        assert len(allocated["fresh"]) == 0
+
+        # Should have truncated 5 aging PRs (25 - 20)
+        assert truncated_count == 5

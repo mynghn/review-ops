@@ -142,11 +142,100 @@ class Config:
     log_level: str = "INFO"
     """Logging level (DEBUG, INFO, WARNING, ERROR)"""
 
-    api_timeout: int = 30
-    """API request timeout in seconds"""
-
-    gh_search_limit: int = 1000
-    """Maximum number of PRs to return from each gh search query"""
+    gh_search_window_size: int = 30
+    """Number of days to look back for recently updated PRs"""
 
     language: str = "en"
     """Language for Slack message formatting ('en' or 'ko')"""
+
+    max_prs_total: int = 30
+    """Total PRs to display across all categories"""
+
+    rate_limit_wait_threshold: int = 300
+    """Max auto-wait seconds (5 minutes default)"""
+
+
+@dataclass
+class RateLimitStatus:
+    """GitHub API rate limit status for decision-making."""
+
+    remaining: int
+    """Remaining API calls in current window"""
+
+    limit: int
+    """Total API calls allowed per window"""
+
+    reset_timestamp: int
+    """Unix timestamp when quota resets"""
+
+    is_exhausted: bool
+    """Whether quota is depleted (remaining == 0 or HTTP 429)"""
+
+    wait_seconds: int | None
+    """Seconds until reset (None if not exhausted)"""
+
+    @property
+    def reset_time(self) -> datetime:
+        """Get reset time as datetime object."""
+        return datetime.fromtimestamp(self.reset_timestamp)
+
+    @property
+    def should_wait(self) -> bool:
+        """Check if wait time is reasonable (< 5 minutes default threshold)."""
+        if self.wait_seconds is None:
+            return False
+        return self.wait_seconds <= 300  # 5 minutes
+
+
+@dataclass
+class APICallMetrics:
+    """Track API usage and optimization effectiveness."""
+
+    search_calls: int = 0
+    """Number of search API calls made"""
+
+    rest_detail_calls: int = 0
+    """Number of individual REST calls avoided (via GraphQL)"""
+
+    graphql_calls: int = 0
+    """Number of GraphQL batch queries made"""
+
+    retry_attempts: int = 0
+    """Total retry attempts across all calls"""
+
+    failed_calls: int = 0
+    """Number of calls that failed after retries"""
+
+    @property
+    def total_api_points(self) -> int:
+        """
+        Calculate approximate GitHub rate limit points consumed.
+
+        Formula: search_calls + graphql_calls * 2 + rest_detail_calls
+        """
+        return self.search_calls + self.graphql_calls * 2 + self.rest_detail_calls
+
+    @property
+    def optimization_rate(self) -> float:
+        """
+        Calculate percentage of REST calls saved via GraphQL batching.
+
+        Returns 0.0 if GraphQL not used.
+        """
+        total_detail_calls = self.rest_detail_calls + self.graphql_calls
+        if total_detail_calls == 0:
+            return 0.0
+        return (self.rest_detail_calls / total_detail_calls) * 100
+
+    @property
+    def success_rate(self) -> float:
+        """
+        Calculate percentage of successful API calls.
+
+        Returns 100.0 if no calls made.
+        """
+        total_calls = self.search_calls + self.graphql_calls + self.rest_detail_calls
+        if total_calls == 0:
+            return 100.0
+        successful = total_calls - self.failed_calls
+        return (successful / total_calls) * 100

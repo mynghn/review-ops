@@ -34,8 +34,6 @@ class TestLoadConfig:
             assert config.github_org == "test-org"
             assert config.slack_webhook_url == "https://hooks.slack.com/services/T00/B00/XXX"
             assert config.log_level == "INFO"  # Default
-            assert config.api_timeout == 30  # Default
-            assert config.gh_search_limit == 1000  # Default
 
     def test_load_config_with_optional_vars(self):
         """Test config loading with optional variables set."""
@@ -48,16 +46,14 @@ class TestLoadConfig:
                     "GITHUB_ORG": "test-org",
                     "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
                     "LOG_LEVEL": "DEBUG",
-                    "API_TIMEOUT": "60",
-                    "GH_SEARCH_LIMIT": "2000",
+                    "GH_SEARCH_WINDOW_SIZE": "60",
                 },
                 clear=True,
             ),
         ):
             config = load_config()
             assert config.log_level == "DEBUG"
-            assert config.api_timeout == 60
-            assert config.gh_search_limit == 2000
+            assert config.gh_search_window_size == 60
 
     def test_load_config_missing_github_token(self):
         """Test error when GH_TOKEN is missing."""
@@ -142,42 +138,6 @@ class TestLoadConfig:
                 clear=True,
             ),
             pytest.raises(ValueError, match="Invalid LOG_LEVEL"),
-        ):
-            load_config()
-
-    def test_load_config_invalid_api_timeout(self):
-        """Test error when API_TIMEOUT is not a valid integer."""
-        with (
-            patch("shutil.which", return_value="/usr/local/bin/gh"),
-            patch.dict(
-                os.environ,
-                {
-                    "GH_TOKEN": "ghp_test123",
-                    "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
-                    "API_TIMEOUT": "invalid",
-                },
-                clear=True,
-            ),
-            pytest.raises(ValueError, match="Invalid API_TIMEOUT"),
-        ):
-            load_config()
-
-    def test_load_config_negative_api_timeout(self):
-        """Test error when API_TIMEOUT is negative."""
-        with (
-            patch("shutil.which", return_value="/usr/local/bin/gh"),
-            patch.dict(
-                os.environ,
-                {
-                    "GH_TOKEN": "ghp_test123",
-                    "GITHUB_ORG": "test-org",
-                "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
-                "API_TIMEOUT": "-10",
-            },
-            clear=True,
-            ),
-            pytest.raises(ValueError, match="Must be a positive integer"),
         ):
             load_config()
 
@@ -363,3 +323,183 @@ class TestLoadTeamMembers:
         members = load_team_members(str(team_file))
         assert members[0].github_username == "alice"
         assert members[0].slack_user_id == "U1234567890"
+
+
+class TestRateLimitConfigValidation:
+    """Tests for rate limit configuration validation."""
+
+    def test_max_prs_total_valid_minimum(self):
+        """Test MAX_PRS_TOTAL at minimum valid value (10)."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "MAX_PRS_TOTAL": "10",
+                },
+                clear=True,
+            ),
+        ):
+            config = load_config()
+            assert config.max_prs_total == 10
+
+    def test_max_prs_total_valid_maximum(self):
+        """Test MAX_PRS_TOTAL at maximum valid value (100)."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "MAX_PRS_TOTAL": "100",
+                },
+                clear=True,
+            ),
+        ):
+            config = load_config()
+            assert config.max_prs_total == 100
+
+    def test_max_prs_total_below_minimum(self):
+        """Test MAX_PRS_TOTAL below minimum (9) raises error."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "MAX_PRS_TOTAL": "9",
+                },
+                clear=True,
+            ),pytest.raises(ValueError, match="Invalid MAX_PRS_TOTAL.*Must be between 10 and 100")
+        ):
+            load_config()
+
+    def test_max_prs_total_above_maximum(self):
+        """Test MAX_PRS_TOTAL above maximum (101) raises error."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "MAX_PRS_TOTAL": "101",
+                },
+                clear=True,
+            ),pytest.raises(ValueError, match="Invalid MAX_PRS_TOTAL.*Must be between 10 and 100")
+        ):
+            load_config()
+
+    def test_rate_limit_wait_threshold_valid_boundaries(self):
+        """Test RATE_LIMIT_WAIT_THRESHOLD at boundaries (60, 600)."""
+        for value in [60, 300, 600]:
+            with (
+                patch("shutil.which", return_value="/usr/local/bin/gh"),
+                patch.dict(
+                    os.environ,
+                    {
+                        "GH_TOKEN": "ghp_test123",
+                        "GITHUB_ORG": "test-org",
+                        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                        "RATE_LIMIT_WAIT_THRESHOLD": str(value),
+                    },
+                    clear=True,
+                ),
+            ):
+                config = load_config()
+                assert config.rate_limit_wait_threshold == value
+
+    def test_rate_limit_wait_threshold_below_minimum(self):
+        """Test RATE_LIMIT_WAIT_THRESHOLD below minimum (59) raises error."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "RATE_LIMIT_WAIT_THRESHOLD": "59",
+                },
+                clear=True,
+            ),
+        ):
+            with pytest.raises(ValueError, match="Invalid RATE_LIMIT_WAIT_THRESHOLD.*Must be between 60 and 600"):
+                load_config()
+
+    def test_rate_limit_wait_threshold_above_maximum(self):
+        """Test RATE_LIMIT_WAIT_THRESHOLD above maximum (601) raises error."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "RATE_LIMIT_WAIT_THRESHOLD": "601",
+                },
+                clear=True,
+            ),
+        ):
+            with pytest.raises(ValueError, match="Invalid RATE_LIMIT_WAIT_THRESHOLD.*Must be between 60 and 600"):
+                load_config()
+
+    def test_all_rate_limit_configs_together(self):
+        """Test all rate limit configs can be set together."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/gh"),
+            patch.dict(
+                os.environ,
+                {
+                    "GH_TOKEN": "ghp_test123",
+                    "GITHUB_ORG": "test-org",
+                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "MAX_PRS_TOTAL": "50",
+                    "RATE_LIMIT_WAIT_THRESHOLD": "600",
+                },
+                clear=True,
+            ),
+        ):
+            config = load_config()
+            assert config.max_prs_total == 50
+            assert config.rate_limit_wait_threshold == 600
+
+
+class TestTeamSizeValidation:
+    """Tests for team size validation (max 15 members)."""
+
+    def test_team_size_at_maximum(self, tmp_path: Path):
+        """Test team with exactly 15 members is valid."""
+        team_file = tmp_path / "team.json"
+        members = [{"github_username": f"user{i}"} for i in range(15)]
+        team_file.write_text(json.dumps(members))
+
+        result = load_team_members(str(team_file))
+        assert len(result) == 15
+
+    def test_team_size_exceeds_maximum(self, tmp_path: Path):
+        """Test team with 16 members raises error."""
+        team_file = tmp_path / "team.json"
+        members = [{"github_username": f"user{i}"} for i in range(16)]
+        team_file.write_text(json.dumps(members))
+
+        with pytest.raises(ValueError, match="Team has 16 members.*exceeds.*limit of 15"):
+            load_team_members(str(team_file))
+
+    def test_team_size_well_over_maximum(self, tmp_path: Path):
+        """Test team with 20 members raises error."""
+        team_file = tmp_path / "team.json"
+        members = [{"github_username": f"user{i}"} for i in range(20)]
+        team_file.write_text(json.dumps(members))
+
+        with pytest.raises(ValueError, match="Team has 20 members.*exceeds.*limit of 15"):
+            load_team_members(str(team_file))

@@ -10,19 +10,18 @@ from models import StalePR, TeamMember
 class SlackClient:
     """Client for sending messages to Slack via webhooks."""
 
-    MAX_PRS_PER_CATEGORY = 15
-    """Maximum number of PRs to display per category before truncation"""
-
-    def __init__(self, webhook_url: str, language: str = "en") -> None:
+    def __init__(self, webhook_url: str, language: str = "en", max_prs_total: int = 30) -> None:
         """
         Initialize Slack client with webhook URL and language.
 
         Args:
             webhook_url: Slack incoming webhook URL
             language: Language code for message formatting ('en' or 'ko', default: 'en')
+            max_prs_total: Total PRs to display across all categories (default: 30)
         """
         self.webhook_url = webhook_url
         self.language = language
+        self.max_prs_total = max_prs_total
 
     def format_message(self, stale_prs: list[StalePR], team_members: list[TeamMember]) -> str:
         """
@@ -210,6 +209,36 @@ class SlackClient:
             msg = f"Failed to send Slack message: {response.status_code} - {response.text}"
             raise Exception(msg)
 
+    def _allocate_pr_display(
+        self, by_category: dict[str, list[StalePR]]
+    ) -> tuple[dict[str, list[StalePR]], int]:
+        """
+        Allocate PRs from total budget, prioritizing staleness (rotten → aging → fresh).
+
+        Args:
+            by_category: Dict mapping category to full PR lists
+
+        Returns:
+            Tuple of (allocated dict, total truncated count)
+        """
+        remaining = self.max_prs_total
+        total_original = sum(len(prs) for prs in by_category.values())
+
+        # Allocate in priority order: rotten → aging → fresh
+        # Initialize all categories to ensure keys exist
+        allocated = {"rotten": [], "aging": [], "fresh": []}
+        for category in ["rotten", "aging", "fresh"]:
+            prs = by_category.get(category, [])
+            allocated[category] = prs[:remaining]
+            remaining -= len(allocated[category])
+            if remaining <= 0:
+                break
+
+        total_allocated = sum(len(prs) for prs in allocated.values())
+        total_truncated = max(0, total_original - total_allocated)
+
+        return allocated, total_truncated
+
     def build_blocks(
         self, by_category: dict[str, list[StalePR]], team_members: list[TeamMember]
     ) -> list[dict]:
@@ -226,15 +255,18 @@ class SlackClient:
         Returns:
             List of Block Kit block dictionaries ready for Slack API
         """
+        # Allocate PRs based on total budget (priority: rotten → aging → fresh)
+        allocated, total_truncated = self._allocate_pr_display(by_category)
+
         blocks = []
 
         # Add blocks for each category (rotten, aging, fresh)
         for category in ["rotten", "aging", "fresh"]:
-            prs_in_category = by_category.get(category, [])
+            prs_in_category = allocated.get(category, [])
             if not prs_in_category:
                 continue  # Skip empty categories
 
-            # Add category blocks
+            # Add category blocks (no further truncation needed)
             category_blocks = self._build_category_blocks(
                 category, prs_in_category, team_members
             )
@@ -247,6 +279,10 @@ class SlackClient:
         if blocks and blocks[-1].get("type") == "divider":
             blocks.pop()
 
+        # Add global truncation warning if any PRs were truncated
+        if total_truncated > 0:
+            blocks.append(self._build_truncation_warning(total_truncated))
+
         # If no blocks were created (all categories empty), return "all clear" message
         if not blocks:
             blocks = self._build_empty_state_blocks()
@@ -257,11 +293,11 @@ class SlackClient:
         self, category: str, prs: list[StalePR], team_members: list[TeamMember]
     ) -> list[dict]:
         """
-        Build blocks for a single category with truncation.
+        Build blocks for a single category (pre-allocated, no truncation).
 
         Args:
             category: Category name ('rotten', 'aging', or 'fresh')
-            prs: List of PRs in this category
+            prs: List of PRs in this category (already allocated from budget)
             team_members: List of team members for @mentions
 
         Returns:
@@ -272,15 +308,9 @@ class SlackClient:
         # Add header block
         blocks.append(self._build_header_block(category))
 
-        # Add PR sections (truncate to MAX_PRS_PER_CATEGORY)
-        displayed_prs = prs[: self.MAX_PRS_PER_CATEGORY]
-        for stale_pr in displayed_prs:
+        # Add PR sections (already allocated, no further truncation)
+        for stale_pr in prs:
             blocks.append(self._build_pr_section(stale_pr, team_members))
-
-        # Add truncation warning if needed
-        if len(prs) > self.MAX_PRS_PER_CATEGORY:
-            truncated_count = len(prs) - self.MAX_PRS_PER_CATEGORY
-            blocks.append(self._build_truncation_warning(truncated_count))
 
         return blocks
 

@@ -74,24 +74,14 @@ def load_config() -> Config:
         )
         raise ValueError(msg)
 
-    api_timeout_str = os.getenv("API_TIMEOUT", "30")
+    gh_search_window_size_str = os.getenv("GH_SEARCH_WINDOW_SIZE", "30")
     try:
-        api_timeout = int(api_timeout_str)
-        if api_timeout <= 0:
-            msg = "API_TIMEOUT must be a positive integer"
+        gh_search_window_size = int(gh_search_window_size_str)
+        if gh_search_window_size <= 0:
+            msg = "GH_SEARCH_WINDOW_SIZE must be a positive integer"
             raise ValueError(msg)
     except ValueError as e:
-        msg = f"Invalid API_TIMEOUT '{api_timeout_str}'. Must be a positive integer."
-        raise ValueError(msg) from e
-
-    gh_search_limit_str = os.getenv("GH_SEARCH_LIMIT", "1000")
-    try:
-        gh_search_limit = int(gh_search_limit_str)
-        if gh_search_limit <= 0:
-            msg = "GH_SEARCH_LIMIT must be a positive integer"
-            raise ValueError(msg)
-    except ValueError as e:
-        msg = f"Invalid GH_SEARCH_LIMIT '{gh_search_limit_str}'. Must be a positive integer."
+        msg = f"Invalid GH_SEARCH_WINDOW_SIZE '{gh_search_window_size_str}'. Must be a positive integer."
         raise ValueError(msg) from e
 
     language = os.getenv("LANGUAGE", "en").lower()
@@ -102,6 +92,30 @@ def load_config() -> Config:
         )
         raise ValueError(msg)
 
+    # Rate limiting configuration
+    max_prs_total_str = os.getenv("MAX_PRS_TOTAL", "30")
+    try:
+        max_prs_total = int(max_prs_total_str)
+        if not 10 <= max_prs_total <= 100:
+            msg = "MAX_PRS_TOTAL must be between 10 and 100"
+            raise ValueError(msg)
+    except ValueError as e:
+        msg = f"Invalid MAX_PRS_TOTAL '{max_prs_total_str}'. Must be between 10 and 100."
+        raise ValueError(msg) from e
+
+    rate_limit_wait_threshold_str = os.getenv("RATE_LIMIT_WAIT_THRESHOLD", "300")
+    try:
+        rate_limit_wait_threshold = int(rate_limit_wait_threshold_str)
+        if not 60 <= rate_limit_wait_threshold <= 600:
+            msg = "RATE_LIMIT_WAIT_THRESHOLD must be between 60 and 600"
+            raise ValueError(msg)
+    except ValueError as e:
+        msg = (
+            f"Invalid RATE_LIMIT_WAIT_THRESHOLD '{rate_limit_wait_threshold_str}'. "
+            "Must be between 60 and 600."
+        )
+        raise ValueError(msg) from e
+
     # Check for gh CLI availability
     _check_gh_cli_available()
 
@@ -110,9 +124,10 @@ def load_config() -> Config:
         github_org=github_org,
         slack_webhook_url=slack_webhook_url,
         log_level=log_level,
-        api_timeout=api_timeout,
-        gh_search_limit=gh_search_limit,
+        gh_search_window_size=gh_search_window_size,
         language=language,
+        max_prs_total=max_prs_total,
+        rate_limit_wait_threshold=rate_limit_wait_threshold,
     )
 
 
@@ -133,7 +148,10 @@ def _check_gh_cli_available() -> None:
         install_cmd = {
             "Darwin": "brew install gh",
             "Linux": "See https://github.com/cli/cli/blob/trunk/docs/install_linux.md",
-            "Windows": "See https://github.com/cli/cli#installation or use: winget install GitHub.cli"
+            "Windows": (
+                "See https://github.com/cli/cli#installation "
+                "or use: winget install GitHub.cli"
+            )
         }.get(system, "See https://cli.github.com/")
 
         msg = (
@@ -184,6 +202,15 @@ def load_team_members(file_path: str = "team_members.json") -> list[TeamMember]:
 
     if not data:
         msg = "Team members file must contain at least one team member"
+        raise ValueError(msg)
+
+    # Validate team size (FR-017)
+    if len(data) > 15:
+        msg = (
+            f"Team has {len(data)} members, which exceeds the recommended limit of 15. "
+            "Large teams may experience GitHub API rate limit issues. "
+            "Consider splitting into multiple runs or increasing MAX_PRS_TOTAL."
+        )
         raise ValueError(msg)
 
     team_members = []

@@ -18,7 +18,6 @@ def sample_config() -> Config:
         github_org="test-org",
         slack_webhook_url="https://hooks.slack.com/services/T00/B00/XXXX",
         log_level="DEBUG",
-        api_timeout=30,
     )
 
 
