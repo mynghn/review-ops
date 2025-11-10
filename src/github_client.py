@@ -289,6 +289,56 @@ class GitHubClient:
             timeout=timeout,
         )
 
+    def _fetch_github_team_members_with_limit(
+        self, org: str, team_slug: str, max_size: int = 100
+    ) -> list[str] | None:
+        """
+        Fetch GitHub team members with size limit check for fail-safe behavior.
+
+        This method checks the team size before attempting to expand members.
+        If the team exceeds the size limit, it returns None to signal fail-safe
+        inclusion (PR should be included without filtering).
+
+        Args:
+            org: GitHub organization name
+            team_slug: URL-safe team slug (e.g., 'backend-team')
+            max_size: Maximum team size to expand (default: 100)
+
+        Returns:
+            List of GitHub usernames if team size <= max_size
+            None if team size > max_size (signals fail-safe inclusion)
+            Empty list if fetch fails (logs warning)
+        """
+        try:
+            # First, check team size
+            result = subprocess.run(
+                ["gh", "api", f"/orgs/{org}/teams/{team_slug}", "--jq", ".members_count"],
+                capture_output=True,
+                text=True,
+                check=True,
+                env=os.environ,
+                timeout=10,
+            )
+
+            members_count = int(result.stdout.strip())
+            logger.debug(f"  Team {org}/{team_slug} has {members_count} members")
+
+            if members_count > max_size:
+                logger.warning(
+                    f"GitHub team {org}/{team_slug} has {members_count} members "
+                    f"(exceeds limit of {max_size}). Skipping expansion (fail-safe: including PR)."
+                )
+                return None  # Signal fail-safe inclusion
+
+            # Team size is within limit, proceed with expansion
+            return self._fetch_github_team_members(org, team_slug)
+
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError) as e:
+            logger.warning(
+                f"Failed to check team size for {org}/{team_slug}: {e}. Using fail-safe (including PR)."
+            )
+            return None  # Fail-safe: include PR
+
     def _fetch_github_team_members(self, org: str, team_slug: str) -> list[str]:
         """
         Fetch GitHub team members using the GitHub API.
@@ -422,26 +472,127 @@ class GitHubClient:
             raise last_error
         raise RuntimeError("Retry logic failed unexpectedly")
 
+    def _search_prs_by_review_status(
+        self, org_name: str, username: str, updated_after: date, review_status: str
+    ) -> subprocess.CompletedProcess:
+        """
+        Execute a single search query for PRs with a specific review status.
+
+        This helper method encapsulates the gh CLI search command for a single username
+        and review status (either "none" or "required"), enabling dual search execution
+        with proper deduplication.
+
+        Args:
+            org_name: GitHub organization name
+            username: GitHub username to search for
+            updated_after: Date to filter PRs updated after
+            review_status: Review status filter ("none" or "required")
+
+        Returns:
+            subprocess.CompletedProcess with stdout containing JSON array of PR search results
+
+        Raises:
+            subprocess.CalledProcessError: If gh CLI command fails after retries
+        """
+        return self._retry_with_backoff(
+            lambda: self._execute_gh_command(
+                [
+                    "gh", "search", "prs",
+                    "--owner", org_name,
+                    "--archived=false",
+                    "--state", "open",
+                    "--draft=false",
+                    "--review", review_status,
+                    "--review-requested", username,
+                    "--updated", f">={updated_after.isoformat()}",
+                    "--limit", str(self.gh_search_limit),
+                    "--json", "number,repository",
+                ]
+            ),
+            max_retries=self.max_retries,
+            backoff_base=self.retry_backoff_base,
+        )
+
+    def _filter_by_team_member_presence(
+        self,
+        all_prs: list[PullRequest],
+        pr_search_metadata: dict[tuple[str, int], set[str]],
+        team_usernames: set[str],
+    ) -> list[PullRequest]:
+        """
+        Filter review:required PRs to include only those with team members in reviewRequests.
+
+        This filtering applies ONLY to PRs found by the review:required search.
+        PRs found only by review:none search are included without filtering.
+
+        Args:
+            all_prs: List of all fetched PRs
+            pr_search_metadata: Dict mapping (repo, number) to set of search types that found the PR
+            team_usernames: Set of GitHub usernames in the tracked team
+
+        Returns:
+            Filtered list of PRs
+        """
+        filtered_prs = []
+        team_usernames_lower = {u.lower() for u in team_usernames}
+
+        for pr in all_prs:
+            pr_key = (pr.repo_name, pr.number)
+
+            # Only filter review:required PRs
+            if "review:required" in pr_search_metadata.get(pr_key, set()):
+                # Check individual reviewers
+                has_team_member = any(
+                    reviewer.lower() in team_usernames_lower for reviewer in pr.reviewers
+                )
+
+                # Check GitHub team reviewers (expanded members)
+                if not has_team_member:
+                    for team_review in pr.github_team_reviewers:
+                        # Handle None members (fail-safe from team expansion)
+                        if team_review.members is None:
+                            has_team_member = True  # Fail-safe: include PR
+                            break
+                        if any(
+                            member.lower() in team_usernames_lower
+                            for member in team_review.members
+                        ):
+                            has_team_member = True
+                            break
+
+                # Exclude if no team members found
+                if not has_team_member:
+                    logger.debug(
+                        f"Excluding PR {pr.repo_name}#{pr.number} "
+                        "(no team members in reviewRequests)"
+                    )
+                    continue
+
+            # Include PR (either passed filter or was from review:none search)
+            filtered_prs.append(pr)
+
+        return filtered_prs
+
     def fetch_team_prs(self, org_name: str, team_usernames: set[str], updated_after: date) -> list[PullRequest]:
         """
-        Fetch open PRs involving team members using a two-phase approach.
+        Fetch open PRs involving team members using dual search with two-phase approach.
 
-        Phase 1 - Search & Deduplicate:
-        - Searches for PRs where
-          - is in unarchived repos, is open, not a draft
-          - is review required
-          - has recent updates after {updated_after} date
-          - team members are requested reviewers
+        Phase 1 - Dual Search & Deduplicate:
+        - For each team member, executes TWO searches:
+          1. review:none - PRs with no reviews submitted yet
+          2. review:required - PRs with some reviews, more needed
         - Collects all PR keys (repo, number) across all searches
+        - Tracks search origin metadata for later filtering
         - Automatically deduplicates using a set to avoid redundant fetches
 
         Phase 2 - Fetch Details:
         - Fetches complete details only for unique PRs
         - Each gh pr view call includes reviews, approvals, and status
 
-        This two-phase approach is much more efficient than:
-        - Iterating through all organization repos (slow for large orgs)
-        - Fetching details before deduplication (wastes API calls)
+        This approach ensures complete coverage:
+        - Captures PRs needing initial reviews (review:none)
+        - Captures PRs needing additional reviews (review:required)
+        - Deduplicates PRs that appear in both searches
 
         Args:
             org_name: Name of the GitHub organization
@@ -458,44 +609,60 @@ class GitHubClient:
         # Check rate limit before making API calls
         self.check_rate_limit()
 
-        # Phase 1: Collect all PR keys from searches (no detail fetching yet)
+        # Phase 1: Collect all PR keys from dual searches (no detail fetching yet)
         pr_keys = set()  # Use set for automatic deduplication
+        pr_search_metadata: dict[tuple[str, int], set[str]] = {}  # Track search origins
+
         for username in team_usernames:
             logger.debug(f"  Searching for user: {username}")
 
             try:
-                result = self._retry_with_backoff(
-                    lambda: self._execute_gh_command(
-                        [
-                            "gh", "search", "prs",
-                            "--owner", org_name,
-                            "--archived=false",
-                            "--state", "open",
-                            "--draft=false",
-                            "--review", "required",
-                            "--review-requested", username,
-                            "--updated", f">={updated_after.isoformat()}",
-                            "--limit", str(self.gh_search_limit),
-                            "--json", "number,repository",
-                        ]
-                    ),
-                    max_retries=self.max_retries,
-                    backoff_base=self.retry_backoff_base,
+                # Search 1: review:none (no reviews submitted yet)
+                result_none = self._search_prs_by_review_status(
+                    org_name, username, updated_after, review_status="none"
                 )
+                prs_data_none = json.loads(result_none.stdout)
+                logger.debug(f"\tFound {len(prs_data_none)} PRs with review:none for {username}")
 
-                prs_data = json.loads(result.stdout)
-                logger.debug(f"\tFound {len(prs_data)} PRs for {username}")
-
-                # Collect PR keys (automatic deduplication via set)
-                for pr_data in prs_data:
+                # Collect PR keys and track metadata
+                for pr_data in prs_data_none:
                     repo_full_name = pr_data["repository"]["nameWithOwner"]
                     pr_number = pr_data["number"]
-                    pr_keys.add((repo_full_name, pr_number))
+                    pr_key = (repo_full_name, pr_number)
+                    pr_keys.add(pr_key)
+
+                    # Track that this PR was found by review:none search
+                    if pr_key not in pr_search_metadata:
+                        pr_search_metadata[pr_key] = set()
+                    pr_search_metadata[pr_key].add("review:none")
 
                 # Add delay between API calls to prevent secondary rate limits
                 if self.api_call_delay > 0:
                     import time
+                    time.sleep(self.api_call_delay)
+                    logger.debug(f"    Waited {self.api_call_delay}s to avoid rate limits")
 
+                # Search 2: review:required (some reviews submitted, more needed)
+                result_required = self._search_prs_by_review_status(
+                    org_name, username, updated_after, review_status="required"
+                )
+                prs_data_required = json.loads(result_required.stdout)
+                logger.debug(f"\tFound {len(prs_data_required)} PRs with review:required for {username}")
+
+                # Collect PR keys and track metadata
+                for pr_data in prs_data_required:
+                    repo_full_name = pr_data["repository"]["nameWithOwner"]
+                    pr_number = pr_data["number"]
+                    pr_key = (repo_full_name, pr_number)
+                    pr_keys.add(pr_key)
+
+                    # Track that this PR was found by review:required search
+                    if pr_key not in pr_search_metadata:
+                        pr_search_metadata[pr_key] = set()
+                    pr_search_metadata[pr_key].add("review:required")
+
+                # Add delay between API calls to prevent secondary rate limits
+                if self.api_call_delay > 0:
                     time.sleep(self.api_call_delay)
                     logger.debug(f"    Waited {self.api_call_delay}s to avoid rate limits")
 
@@ -517,7 +684,20 @@ class GitHubClient:
                 logger.error(error_msg)
                 raise ValueError(error_msg) from e
 
-        logger.info(f"Found {len(pr_keys)} unique PR(s) across all searches")
+        # Log observability metrics for dual search results
+        review_none_count = sum(
+            1 for metadata in pr_search_metadata.values() if "review:none" in metadata
+        )
+        review_required_count = sum(
+            1 for metadata in pr_search_metadata.values() if "review:required" in metadata
+        )
+        both_count = sum(1 for metadata in pr_search_metadata.values() if len(metadata) == 2)
+
+        logger.info(
+            f"Dual search results: {review_none_count} from review:none, "
+            f"{review_required_count} from review:required, "
+            f"{both_count} in both (deduplicated to {len(pr_keys)} unique PRs)"
+        )
 
         # Phase 2: Fetch details for unique PRs
         all_prs = []
@@ -549,7 +729,20 @@ class GitHubClient:
                     all_prs.append(pr_details)
 
         logger.info(f"Successfully fetched details for {len(all_prs)} PR(s)")
-        return all_prs
+
+        # Phase 3: Filter review:required PRs by team member presence
+        filtered_prs = self._filter_by_team_member_presence(
+            all_prs, pr_search_metadata, team_usernames
+        )
+
+        if len(filtered_prs) < len(all_prs):
+            logger.info(
+                f"Filtered out {len(all_prs) - len(filtered_prs)} PR(s) "
+                "without team members in reviewRequests"
+            )
+
+        logger.info(f"Returning {len(filtered_prs)} PR(s) after filtering")
+        return filtered_prs
 
     def _fetch_pr_details(self, repo_full_name: str, pr_number: int) -> PullRequest | None:
         """
@@ -603,7 +796,7 @@ class GitHubClient:
                 if not req.get("login") and req.get("slug") and org:
                     team_name = req.get("name", req.get("slug"))
                     team_slug = req["slug"]
-                    members = self._fetch_github_team_members(org, team_slug)
+                    members = self._fetch_github_team_members_with_limit(org, team_slug)
 
                     github_team_reviewers.append(
                         GitHubTeamReviewRequest(
@@ -806,7 +999,7 @@ class GitHubClient:
                                 "name", requested_reviewer.get("slug")
                             )
                             team_slug = requested_reviewer["slug"]
-                            members = self._fetch_github_team_members(owner, team_slug)
+                            members = self._fetch_github_team_members_with_limit(owner, team_slug)
 
                             github_team_reviewers.append(
                                 GitHubTeamReviewRequest(

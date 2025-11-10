@@ -119,11 +119,13 @@ def test_fetch_team_prs_includes_team_reviewer(mock_run, github_client):
         }
     })
 
-    # Mock calls: rate_limit, then 2 searches (one per user), then pr_details (GraphQL)
+    # Mock calls: rate_limit, then 4 searches (dual search per user), then pr_details (GraphQL)
     mock_run.side_effect = [
         rate_limit_result,
-        empty_search_result,  # search for alice
-        pr_search_result,     # search for bob - returns the PR
+        empty_search_result,  # alice review:none search
+        empty_search_result,  # alice review:required search
+        empty_search_result,  # bob review:none search
+        pr_search_result,     # bob review:required search - returns the PR
         pr_details            # GraphQL batch query for PR details
     ]
 
@@ -188,12 +190,14 @@ def test_fetch_team_prs_excludes_fully_external_prs(mock_run, github_client):
         "deletions": 12
     })
 
-    # Mock calls: rate_limit, then 2 searches (one per user), then pr_details (GraphQL)
-    # Note: Both searches return empty, so no GraphQL call should be made
+    # Mock calls: rate_limit, then 4 searches (dual search per user)
+    # Note: All searches return empty, so no GraphQL call should be made
     mock_run.side_effect = [
         rate_limit_result,
-        empty_search_result,  # search for alice
-        empty_search_result,  # search for bob
+        empty_search_result,  # alice review:none search
+        empty_search_result,  # alice review:required search
+        empty_search_result,  # bob review:none search
+        empty_search_result,  # bob review:required search
     ]
 
     # Execute
@@ -262,11 +266,13 @@ def test_fetch_team_prs_includes_mixed_reviewers(mock_run, github_client):
         }
     })
 
-    # Mock calls: rate_limit, then 2 searches (one per user), then pr_details (GraphQL)
+    # Mock calls: rate_limit, then 4 searches (dual search per user), then pr_details (GraphQL)
     mock_run.side_effect = [
         rate_limit_result,
-        pr_search_result,     # search for alice - returns the PR
-        empty_search_result,  # search for bob
+        pr_search_result,     # alice review:none search - returns the PR
+        empty_search_result,  # alice review:required search
+        empty_search_result,  # bob review:none search
+        empty_search_result,  # bob review:required search
         pr_details            # GraphQL batch query for PR details
     ]
 
