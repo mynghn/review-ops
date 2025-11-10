@@ -360,7 +360,7 @@ class TestBuildBlocks:
         # Should return "all clear" message with header + section (table view format)
         assert len(blocks) == 2
         assert blocks[0]["type"] == "header"
-        assert blocks[0]["text"]["text"] == f":help: {date.today().isoformat()} Stale PR Board"
+        assert blocks[0]["text"]["text"] == f"[{date.today().isoformat()}] Stale PR Board :help:"
         assert blocks[1]["type"] == "section"
         assert "🎉 All clear! No PRs need review" in blocks[1]["text"]["text"]
 
@@ -372,7 +372,7 @@ class TestBuildBlocks:
         # Should return Korean "all clear" message (table view format)
         assert len(blocks) == 2
         assert blocks[0]["type"] == "header"
-        assert blocks[0]["text"]["text"] == f":help: {date.today().isoformat()} 리뷰가 필요한 PR들"
+        assert blocks[0]["text"]["text"] == f"[{date.today().isoformat()}] 리뷰가 필요한 PR들 :help:"
         assert blocks[1]["type"] == "section"
         assert "🎉 리뷰 대기 중인 PR이 없습니다" in blocks[1]["text"]["text"]
 
@@ -384,7 +384,7 @@ class TestBuildBlocks:
         # Should have board header + legend + table (table view format)
         assert len(blocks) == 3
         assert blocks[0]["type"] == "header"
-        assert blocks[0]["text"]["text"] == f":help: {date.today().isoformat()} Stale PR Board"
+        assert blocks[0]["text"]["text"] == f"[{date.today().isoformat()}] Stale PR Board :help:"
         assert blocks[1]["type"] == "context"
         assert blocks[2]["type"] == "table"
         # Table should have 1 header row + 1 data row
@@ -417,7 +417,7 @@ class TestBuildBlocks:
         # Should have board header + legend + table with single PR
         assert len(blocks) == 3
         assert blocks[0]["type"] == "header"
-        assert blocks[0]["text"]["text"] == f":help: {date.today().isoformat()} Stale PR Board"
+        assert blocks[0]["text"]["text"] == f"[{date.today().isoformat()}] Stale PR Board :help:"
         assert blocks[1]["type"] == "context"
         assert blocks[2]["type"] == "table"
         assert len(blocks[2]["rows"]) == 2  # 1 header + 1 data row
@@ -502,7 +502,7 @@ class TestPostStalePRSummary:
             # Should have board header + legend + table
             assert len(blocks) == 3
             assert blocks[0]["type"] == "header"
-            assert blocks[0]["text"]["text"] == f":help: {date.today().isoformat()} Stale PR Board"
+            assert blocks[0]["text"]["text"] == f"[{date.today().isoformat()}] Stale PR Board :help:"
             assert blocks[1]["type"] == "context"
             assert blocks[2]["type"] == "table"
             # Table should have 1 header + 2 data rows (sorted by staleness descending)

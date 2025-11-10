@@ -5,7 +5,7 @@
         "type": "header",
         "text": {
           "type": "plain_text",
-          "text": ":help: 2025-11-11 Stale PR Board",
+          "text": "[2025-11-11] Stale PR Board :help:",
           "emoji": true
         }
       },
@@ -24,7 +24,7 @@
         "type": "header",
         "text": {
           "type": "plain_text",
-          "text": ":help: 2025-11-11 리뷰가 필요한 PR들",
+          "text": "[2025-11-11] 리뷰가 필요한 PR들 :help:",
           "emoji": true
         }
       },
