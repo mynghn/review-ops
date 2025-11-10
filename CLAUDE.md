@@ -94,7 +94,7 @@ Python 3.12: Follow standard conventions
 - Supported values: `'en'` or `'ko'` (case-insensitive)
 
 ### Translation Strings (Table View)
-1. Board title: ":calendar: Code Review Board" / ":calendar: 코드 리뷰 현황판"
+1. Board title: ":help: yyyy-MM-dd Stale PR Board" / ":help: yyyy-MM-dd 리뷰가 필요한 PR들"
 2. Staleness legend (rotten): ":nauseated_face: Rotten (8d~)" / ":nauseated_face: 부패 중.. (8d~)"
 3. Staleness legend (aging): ":cheese_wedge: Aging (4~7d)" / ":cheese_wedge: 숙성 중.. (4~7d)"
 4. Staleness legend (fresh): ":sparkles: Fresh (~3d)" / ":sparkles: 신규 (~3d)"

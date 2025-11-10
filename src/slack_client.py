@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import requests
+from datetime import date
 
 from models import PullRequest, StalePR, TeamMember
 
@@ -446,9 +447,10 @@ class SlackClient:
         Returns:
             Block Kit header block dictionary
         """
+        today = date.today().isoformat()
         titles = {
-            "en": ":calendar: Code Review Board",
-            "ko": ":calendar: 코드 리뷰 현황판",
+            "en": f":help: {today} Stale PR Board",
+            "ko": f":help: {today} 리뷰가 필요한 PR들",
         }
         return {
             "type": "header",

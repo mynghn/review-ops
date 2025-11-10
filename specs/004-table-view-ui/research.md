@@ -124,7 +124,7 @@ This document consolidates findings from Phase 0 research to resolve all technic
 
 | Context | English | Korean |
 |---------|---------|--------|
-| Header title | `:calendar: Code Review Board` | `:calendar: 코드 리뷰 현황판` |
+| Header title | `:help: 2025-11-11 Stale PR Board` | `:help: 2025-11-11 리뷰가 필요한 PR들` |
 | Column 1 header | `Staleness` | `신선도` |
 | Column 2 header | `Age` | `경과` |
 | Column 3 header | `PR` | `PR` |
@@ -313,7 +313,7 @@ truncated_count = len(sorted_prs) - len(displayed_prs)
       "type": "header",
       "text": {
         "type": "plain_text",
-        "text": ":calendar: Code Review Board",  // or Korean equivalent
+        "text": ":help: 2025-11-11 Stale PR Board",  // or Korean equivalent
         "emoji": true
       }
     },

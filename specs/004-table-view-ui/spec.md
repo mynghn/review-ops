@@ -90,7 +90,7 @@ When total PRs exceed the configured limit (default 30), the table displays the 
 - **FR-009**: System MUST respect max_prs_total configuration, truncating the table to show only the stalest N PRs
 - **FR-010**: System MUST display a truncation warning message when PRs are not shown, indicating the count of hidden PRs
 - **FR-011**: System MUST replace existing category-based Block Kit format (separate headers and dividers per category) with single table format
-- **FR-012**: Table header MUST include an emoji and title in configured language (EN: ":calendar: Code Review Board" / KO: ":calendar: 코드 리뷰 현황판")
+- **FR-012**: Table header MUST include an emoji and title in configured language (EN: ":help: 2025-11-11 Stale PR Board" / KO: ":help: 2025-11-11 리뷰가 필요한 PR들")
 - **FR-013**: System MUST skip table rendering when no PRs exist and display a plain text message block with celebration message: "🎉 All clear! No PRs need review" (EN) / "🎉 리뷰 대기 중인 PR이 없습니다" (KO)
 
 ### Key Entities

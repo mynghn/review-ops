@@ -443,9 +443,10 @@ def build_blocks(
 
 def _build_board_header_block(self) -> dict:
     """Build header block with board title."""
+    today = date.today().isoformat()
     titles = {
-        "en": ":calendar: Code Review Board",
-        "ko": ":calendar: 코드 리뷰 현황판"
+        "en": f":help: {today} Stale PR Board",
+        "ko": f":help: {today} 리뷰가 필요한 PR들"
     }
     return {
         "type": "header",

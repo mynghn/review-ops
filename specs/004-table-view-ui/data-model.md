@@ -288,7 +288,7 @@ Bilingual strings for table UI elements.
 ```python
 TRANSLATIONS = {
     "en": {
-        "board_title": ":calendar: Code Review Board",
+        "board_title": ":help: 2025-11-11 Stale PR Board",
         "col_staleness": "Staleness",
         "col_age": "Age",
         "col_pr": "PR",
@@ -297,7 +297,7 @@ TRANSLATIONS = {
         "truncation_warning": "⚠️ +{count} more PRs not shown. Check GitHub for full list."
     },
     "ko": {
-        "board_title": ":calendar: 코드 리뷰 현황판",
+        "board_title": ":help: 2025-11-11 리뷰가 필요한 PR들",
         "col_staleness": "신선도",
         "col_age": "경과",
         "col_pr": "PR",
