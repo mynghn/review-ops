@@ -8,6 +8,7 @@ Auto-generated from all feature plans. Last updated: 2025-10-31
 - N/A (stateless CLI application, in-memory PR deduplication only) (003-github-rate-limit-handling)
 - Python 3.12 (existing) + requests (existing), Slack Block Kit API (JSON format - no new libraries) (004-table-view-ui)
 - N/A (stateless CLI application, in-memory processing only) (004-table-view-ui)
+- Python 3.12 (existing) + requests, PyGithub, gh CLI (existing), Slack Block Kit (JSON format) (005-refine-review-filter)
 
 ## Project Structure
 
@@ -56,6 +57,26 @@ Python 3.12: Follow standard conventions
 
 ## Features
 
+### Dual Search with Smart Filtering (005-refine-review-filter)
+- **Dual search execution**: For each team member, executes TWO GitHub searches:
+  1. `review:none` - PRs with no reviews submitted yet
+  2. `review:required` - PRs with some reviews submitted, more needed
+- **Perfect deduplication**: PRs appearing in both searches are fetched only once
+- **Smart filtering**: `review:required` PRs are filtered to include only those where team members appear in current `reviewRequests` field
+- **Team member presence check**: Case-insensitive comparison of GitHub usernames in individual reviewers and GitHub team members
+- **GitHub team expansion**: Expands GitHub team review requests to check if tracked team members are part of the requested team
+- **Fail-safe behavior**: PRs with review:none status are always included (no filtering applied)
+- **Observability logging**: Logs search statistics (PRs from each search type, deduplication count, filtering count)
+
+#### Implementation Details
+- **Helper method**: `_search_prs_by_review_status()` encapsulates single search execution with retry logic
+- **Metadata tracking**: `pr_search_metadata` dict tracks which searches found each PR for conditional filtering
+- **Filtering method**: `_filter_by_team_member_presence()` applies team member filtering only to review:required PRs
+- **Phase-based approach**:
+  - Phase 1: Dual search & deduplication
+  - Phase 2: Fetch PR details
+  - Phase 3: Filter by team member presence
+
 ### Table View UI (Block Kit Slack Formatting)
 - **Unified table format**: All PRs displayed in a single sorted table (replaces category-based sections)
 - **5-column layout**: Staleness emoji, Age, PR details, Author, Reviewers
@@ -86,6 +107,7 @@ Python 3.12: Follow standard conventions
 11. Truncation warning: "⚠️ +{count} more PRs not shown. Check GitHub for full list." / "⚠️ +{count}개 더 있음. 전체 목록은 GitHub에서 확인하세요."
 
 ## Recent Changes
+- 005-refine-review-filter: Added Python 3.12 (existing) + requests, PyGithub, gh CLI (existing), Slack Block Kit (JSON format)
 
 - Added staleness legend context block to Slack message
   - Added `SlackClient._build_staleness_legend_block()` method for legend generation
@@ -103,7 +125,6 @@ Python 3.12: Follow standard conventions
   - Updated `SlackClient._build_table_data_row()` to add author cell with user mention
   - Updated `SlackClient.build_blocks()` column_settings to 5 columns
   - Updated all unit tests to expect 5 columns
-- 004-table-view-ui: Implemented table view UI for Stale PR Board
   - Replaced category-based Block Kit format with unified table view
   - Added `SlackClient._build_table_header_row()` for bilingual table headers
   - Added `SlackClient._build_table_data_row()` for PR row generation
@@ -115,7 +136,6 @@ Python 3.12: Follow standard conventions
   - Updated `SlackClient._build_empty_state_blocks()` for simplified empty state
   - Created 4 new unit tests for table view functionality
   - Code coverage: 73% for slack_client.py (maintained baseline)
-- 003-github-rate-limit-handling: Added Python 3.12 (existing)
   - Added `SlackClient.post_stale_pr_summary()` method for Block Kit messages
   - Added language parameter to `SlackClient.__init__()`
   - Added `LANGUAGE` config validation in `config.py`
