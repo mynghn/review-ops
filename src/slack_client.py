@@ -563,9 +563,9 @@ class SlackClient:
 
         # Column 3: PR details (repo#number + link)
         pr_elements = [
-            {"type": "link", "text": f"{pr.repo_name}#{pr.number}", "url": pr.url},
-            {"type": "text", "text": "\n"},
             {"type": "text", "text": _abbreviate(pr.title, max_length=50), "style": {"italic": True}},
+            {"type": "text", "text": "\n"},
+            {"type": "link", "text": f"{pr.repo_name}#{pr.number}", "url": pr.url},
         ]
         col_pr = self._build_rich_text_cell(pr_elements)
 

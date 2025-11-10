@@ -169,13 +169,13 @@ def test_table_data_row_structure():
     # Column 3: PR details (repo#number + link)
     pr_cell_elements = data_row[2]["elements"][0]["elements"]
     assert len(pr_cell_elements) == 3
-    assert pr_cell_elements[0]["type"] == "link"
-    assert pr_cell_elements[0]["text"] == "test-repo#123"
-    assert pr_cell_elements[0]["url"] == "https://github.com/org/repo/pull/123"
+    assert pr_cell_elements[2]["type"] == "link"
+    assert pr_cell_elements[2]["text"] == "test-repo#123"
+    assert pr_cell_elements[2]["url"] == "https://github.com/org/repo/pull/123"
     assert pr_cell_elements[1]["type"] == "text"
     assert pr_cell_elements[1]["text"] == "\n"
-    assert pr_cell_elements[2]["type"] == "text"
-    assert pr_cell_elements[2]["text"] == "Test PR Title"
+    assert pr_cell_elements[0]["type"] == "text"
+    assert pr_cell_elements[0]["text"] == "Test PR Title"
 
     # Column 4: Author
     author_cell_elements = data_row[3]["elements"][0]["elements"]
