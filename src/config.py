@@ -92,6 +92,15 @@ def load_config() -> Config:
         )
         raise ValueError(msg)
 
+    show_non_team_reviewers_str = os.getenv("SHOW_NON_TEAM_REVIEWERS", "true").lower()
+    if show_non_team_reviewers_str not in {"true", "false"}:
+        msg = (
+            f"Invalid SHOW_NON_TEAM_REVIEWERS '{show_non_team_reviewers_str}'. "
+            "Must be 'true' or 'false'"
+        )
+        raise ValueError(msg)
+    show_non_team_reviewers = show_non_team_reviewers_str == "true"
+
     # Rate limiting configuration
     max_prs_total_str = os.getenv("MAX_PRS_TOTAL", "30")
     try:
@@ -128,6 +137,7 @@ def load_config() -> Config:
         language=language,
         max_prs_total=max_prs_total,
         rate_limit_wait_threshold=rate_limit_wait_threshold,
+        show_non_team_reviewers=show_non_team_reviewers,
     )
 
 

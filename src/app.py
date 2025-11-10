@@ -83,6 +83,7 @@ def main() -> int:
             webhook_url=config.slack_webhook_url,
             language=config.language,
             max_prs_total=config.max_prs_total,
+            show_non_team_reviewers=config.show_non_team_reviewers,
         )
 
         # Check rate limit before making API calls

@@ -465,7 +465,8 @@ def test_github_team_with_complete_deduplication():
     # Test the method directly
     data_row = client._build_table_data_row(stale_pr, team_members)
 
-    # Reviewers column (now column 5) should show only team (no trailing newline, no duplicate reviewers)
+    # Reviewers column (now column 5) should show only team
+    # (no trailing newline, no duplicate reviewers)
     reviewer_cell = data_row[4]["elements"][0]["elements"]
 
     # Should have: "@Backend Team (" + user(alice) + ", " + user(bob) + ")"
@@ -476,3 +477,228 @@ def test_github_team_with_complete_deduplication():
     assert reviewer_cell[3]["user_id"] == "U22222"
     assert reviewer_cell[4]["text"] == ")"
     assert len(reviewer_cell) == 5  # No extra elements (no trailing newline, no duplicates)
+
+
+# === Tests for Non-Team Member Filtering ===
+
+
+def test_reviewer_filtering_disabled_shows_all_reviewers():
+    """Test that with filtering disabled (default), all reviewers are shown."""
+    client = SlackClient(
+        webhook_url="mock", language="en", max_prs_total=30, show_non_team_reviewers=True
+    )
+
+    # Create mock PR with team and non-team reviewers
+    pr = create_mock_pr(
+        repo_name="test-repo",
+        number=123,
+        title="Test PR",
+        reviewers=["team_member", "non_team_member"],
+    )
+    stale_pr = StalePR(pr=pr, staleness_days=5.0)
+
+    # Only team_member is in team_members.json
+    team_members = [
+        TeamMember(github_username="team_member", slack_user_id="U11111"),
+    ]
+
+    # Test the method directly
+    data_row = client._build_table_data_row(stale_pr, team_members)
+
+    # Reviewers column should show BOTH reviewers
+    reviewer_cell = data_row[4]["elements"][0]["elements"]
+
+    # Should have: team_member mention + newline + @non_team_member (fallback)
+    assert reviewer_cell[0]["type"] == "user"
+    assert reviewer_cell[0]["user_id"] == "U11111"  # team_member
+    assert reviewer_cell[1]["text"] == "\n"
+    assert reviewer_cell[2]["text"] == "@non_team_member"  # fallback for non-team member
+
+
+def test_reviewer_filtering_enabled_filters_individual_reviewers():
+    """Test that with filtering enabled, only team members are shown."""
+    client = SlackClient(
+        webhook_url="mock", language="en", max_prs_total=30, show_non_team_reviewers=False
+    )
+
+    # Create mock PR with team and non-team reviewers
+    pr = create_mock_pr(
+        repo_name="test-repo",
+        number=123,
+        title="Test PR",
+        reviewers=["team_member", "non_team_member"],
+    )
+    stale_pr = StalePR(pr=pr, staleness_days=5.0)
+
+    # Only team_member is in team_members.json
+    team_members = [
+        TeamMember(github_username="team_member", slack_user_id="U11111"),
+    ]
+
+    # Test the method directly
+    data_row = client._build_table_data_row(stale_pr, team_members)
+
+    # Reviewers column should show ONLY team_member
+    reviewer_cell = data_row[4]["elements"][0]["elements"]
+
+    # Should have: only team_member mention (no non_team_member)
+    assert len(reviewer_cell) == 1
+    assert reviewer_cell[0]["type"] == "user"
+    assert reviewer_cell[0]["user_id"] == "U11111"  # team_member
+
+
+def test_reviewer_filtering_enabled_filters_github_team_members():
+    """Test that with filtering enabled, GitHub team members are filtered."""
+    client = SlackClient(
+        webhook_url="mock", language="en", max_prs_total=30, show_non_team_reviewers=False
+    )
+
+    # Create GitHub team with team and non-team members
+    github_team = GitHubTeamReviewRequest(
+        team_name="Backend Team",
+        team_slug="backend-team",
+        members=["team_member", "non_team_member"],
+    )
+
+    # Create mock PR with GitHub team reviewer
+    pr = create_mock_pr(
+        repo_name="test-repo",
+        number=123,
+        title="Test PR",
+        reviewers=[],
+        github_team_reviewers=[github_team],
+    )
+    stale_pr = StalePR(pr=pr, staleness_days=5.0)
+
+    # Only team_member is in team_members.json
+    team_members = [
+        TeamMember(github_username="team_member", slack_user_id="U11111"),
+    ]
+
+    # Test the method directly
+    data_row = client._build_table_data_row(stale_pr, team_members)
+
+    # Reviewers column should show only team_member in the team
+    reviewer_cell = data_row[4]["elements"][0]["elements"]
+
+    # Should have: "@Backend Team (" + team_member + ")" (no non_team_member)
+    assert reviewer_cell[0]["text"] == "@Backend Team ("
+    assert reviewer_cell[1]["user_id"] == "U11111"  # team_member only
+    assert reviewer_cell[2]["text"] == ")"
+    assert len(reviewer_cell) == 3
+
+
+def test_reviewer_filtering_enabled_skips_empty_github_teams():
+    """Test that GitHub teams with no team members after filtering are skipped entirely."""
+    client = SlackClient(
+        webhook_url="mock", language="en", max_prs_total=30, show_non_team_reviewers=False
+    )
+
+    # Create GitHub team with only non-team members
+    github_team = GitHubTeamReviewRequest(
+        team_name="Backend Team",
+        team_slug="backend-team",
+        members=["non_team_member1", "non_team_member2"],
+    )
+
+    # Create mock PR with GitHub team reviewer
+    pr = create_mock_pr(
+        repo_name="test-repo",
+        number=123,
+        title="Test PR",
+        reviewers=[],
+        github_team_reviewers=[github_team],
+    )
+    stale_pr = StalePR(pr=pr, staleness_days=5.0)
+
+    # team_members.json has different users (not in the team)
+    team_members = [
+        TeamMember(github_username="other_team_member", slack_user_id="U11111"),
+    ]
+
+    # Test the method directly
+    data_row = client._build_table_data_row(stale_pr, team_members)
+
+    # Reviewers column should show dash (team is completely filtered out)
+    reviewer_cell = data_row[4]["elements"][0]["elements"]
+
+    assert len(reviewer_cell) == 1
+    assert reviewer_cell[0]["text"] == "-"
+
+
+def test_reviewer_filtering_enabled_all_reviewers_filtered():
+    """Test that when all reviewers are filtered out, dash is displayed."""
+    client = SlackClient(
+        webhook_url="mock", language="en", max_prs_total=30, show_non_team_reviewers=False
+    )
+
+    # Create mock PR with only non-team reviewers
+    pr = create_mock_pr(
+        repo_name="test-repo",
+        number=123,
+        title="Test PR",
+        reviewers=["non_team_member1", "non_team_member2"],
+    )
+    stale_pr = StalePR(pr=pr, staleness_days=5.0)
+
+    # team_members.json has different users
+    team_members = [
+        TeamMember(github_username="other_team_member", slack_user_id="U11111"),
+    ]
+
+    # Test the method directly
+    data_row = client._build_table_data_row(stale_pr, team_members)
+
+    # Reviewers column should show dash
+    reviewer_cell = data_row[4]["elements"][0]["elements"]
+
+    assert len(reviewer_cell) == 1
+    assert reviewer_cell[0]["text"] == "-"
+
+
+def test_reviewer_filtering_enabled_mixed_team_and_github_teams():
+    """Test filtering with both GitHub teams and individual reviewers."""
+    client = SlackClient(
+        webhook_url="mock", language="en", max_prs_total=30, show_non_team_reviewers=False
+    )
+
+    # Create GitHub team with mixed members
+    github_team = GitHubTeamReviewRequest(
+        team_name="Backend Team",
+        team_slug="backend-team",
+        members=["alice", "non_team_member"],
+    )
+
+    # Create mock PR with GitHub team and individual reviewers
+    pr = create_mock_pr(
+        repo_name="test-repo",
+        number=123,
+        title="Test PR",
+        reviewers=["bob", "another_non_team_member"],
+        github_team_reviewers=[github_team],
+    )
+    stale_pr = StalePR(pr=pr, staleness_days=5.0)
+
+    # Only alice and bob are team members
+    team_members = [
+        TeamMember(github_username="alice", slack_user_id="U11111"),
+        TeamMember(github_username="bob", slack_user_id="U22222"),
+    ]
+
+    # Test the method directly
+    data_row = client._build_table_data_row(stale_pr, team_members)
+
+    # Reviewers column should show: @Backend Team (alice) + newline + bob
+    reviewer_cell = data_row[4]["elements"][0]["elements"]
+
+    # Team section: "@Backend Team (" + alice + ")" (non_team_member filtered out)
+    assert reviewer_cell[0]["text"] == "@Backend Team ("
+    assert reviewer_cell[1]["user_id"] == "U11111"  # alice
+    assert reviewer_cell[2]["text"] == ")"
+
+    # Newline before individual reviewers
+    assert reviewer_cell[3]["text"] == "\n"
+
+    # Only bob shown (another_non_team_member filtered out, alice deduplicated)
+    assert reviewer_cell[4]["user_id"] == "U22222"  # bob
+    assert len(reviewer_cell) == 5

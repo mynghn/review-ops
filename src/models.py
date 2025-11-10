@@ -171,6 +171,9 @@ class Config:
     rate_limit_wait_threshold: int = 300
     """Max auto-wait seconds (5 minutes default)"""
 
+    show_non_team_reviewers: bool = True
+    """Whether to show non-team member reviewers in table"""
+
 
 @dataclass
 class RateLimitStatus:

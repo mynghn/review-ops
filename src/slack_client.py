@@ -10,7 +10,13 @@ from models import PullRequest, StalePR, TeamMember
 class SlackClient:
     """Client for sending messages to Slack via webhooks."""
 
-    def __init__(self, webhook_url: str, language: str = "en", max_prs_total: int = 30) -> None:
+    def __init__(
+        self,
+        webhook_url: str,
+        language: str = "en",
+        max_prs_total: int = 30,
+        show_non_team_reviewers: bool = True,
+    ) -> None:
         """
         Initialize Slack client with webhook URL and language.
 
@@ -18,10 +24,12 @@ class SlackClient:
             webhook_url: Slack incoming webhook URL
             language: Language code for message formatting ('en' or 'ko', default: 'en')
             max_prs_total: Total PRs to display across all categories (default: 30)
+            show_non_team_reviewers: Whether to show non-team member reviewers (default: True)
         """
         self.webhook_url = webhook_url
         self.language = language
         self.max_prs_total = max_prs_total
+        self.show_non_team_reviewers = show_non_team_reviewers
 
     def format_message(self, stale_prs: list[StalePR], team_members: list[TeamMember]) -> str:
         """
@@ -596,6 +604,9 @@ class SlackClient:
             if member.slack_user_id
         }
 
+        # Create set of team member usernames for filtering (if needed)
+        team_usernames = {member.github_username for member in team_members}
+
         def add_user_mention(username: str) -> None:
             """Helper to add a user mention element."""
             slack_id = username_to_slack_id.get(username)
@@ -607,23 +618,49 @@ class SlackClient:
 
         # First, collect GitHub team members for deduplication
         for github_team in pr.github_team_reviewers:
-            all_reviewer_usernames.update(github_team.members)
+            # Filter to only team members if configured
+            if self.show_non_team_reviewers:
+                all_reviewer_usernames.update(github_team.members)
+            else:
+                # Only include team members
+                filtered_members = [m for m in github_team.members if m in team_usernames]
+                all_reviewer_usernames.update(filtered_members)
 
         # Calculate remaining individual reviewers after deduplication
-        remaining_reviewers = [r for r in pr.reviewers if r not in all_reviewer_usernames]
+        # and filter to only team members if configured
+        if self.show_non_team_reviewers:
+            remaining_reviewers = [r for r in pr.reviewers if r not in all_reviewer_usernames]
+        else:
+            remaining_reviewers = [
+                r
+                for r in pr.reviewers
+                if r not in all_reviewer_usernames and r in team_usernames
+            ]
 
         # Now display GitHub teams with their members
         for i, github_team in enumerate(pr.github_team_reviewers):
+            # Filter team members if configured
+            if self.show_non_team_reviewers:
+                members_to_display = github_team.members
+            else:
+                members_to_display = [m for m in github_team.members if m in team_usernames]
+
+            # Skip this team entirely if filtering removed all members
+            # (but still show teams that were originally empty - API failures)
+            if not members_to_display and not self.show_non_team_reviewers and github_team.members:
+                # Team had members but they were all filtered out
+                continue
+
             # Add team name prefix with @ and opening parenthesis
             elements.append({"type": "text", "text": f"@{github_team.team_name} ("})
 
             # Add team members
-            if github_team.members:
-                for j, member in enumerate(github_team.members):
+            if members_to_display:
+                for j, member in enumerate(members_to_display):
                     add_user_mention(member)
 
                     # Add comma+space between team members (but not after the last one)
-                    if j < len(github_team.members) - 1:
+                    if j < len(members_to_display) - 1:
                         elements.append({"type": "text", "text": ", "})
 
                 # Close parenthesis after members
