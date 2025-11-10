@@ -69,7 +69,7 @@ def test_table_header_row_english():
     assert header_row[0]["elements"][0]["elements"][0]["text"] == "Staleness"
     assert header_row[1]["elements"][0]["elements"][0]["text"] == "Age"
     assert header_row[2]["elements"][0]["elements"][0]["text"] == "PR"
-    assert header_row[3]["elements"][0]["elements"][0]["text"] == "Reviewers"
+    assert header_row[3]["elements"][0]["elements"][0]["text"] == "Review awaited"
 
     # Assert bold styling
     for cell in header_row:
@@ -86,7 +86,7 @@ def test_table_header_row_korean():
     assert header_row[0]["elements"][0]["elements"][0]["text"] == "신선도"
     assert header_row[1]["elements"][0]["elements"][0]["text"] == "경과"
     assert header_row[2]["elements"][0]["elements"][0]["text"] == "PR"
-    assert header_row[3]["elements"][0]["elements"][0]["text"] == "리뷰어"
+    assert header_row[3]["elements"][0]["elements"][0]["text"] == "리뷰 대기 중"
 ```
 
 **Run tests (should fail)**:
@@ -109,8 +109,8 @@ def _build_table_header_row(self) -> list[dict]:
         List of 4 rich_text cells with bold column headers
     """
     headers = {
-        "en": ["Staleness", "Age", "PR", "Reviewers"],
-        "ko": ["신선도", "경과", "PR", "리뷰어"]
+        "en": ["Staleness", "Age", "PR", "Review awaited"],
+        "ko": ["신선도", "경과", "PR", "리뷰 대기 중"]
     }
 
     header_texts = headers[self.language]

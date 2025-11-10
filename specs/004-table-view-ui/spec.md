@@ -31,12 +31,12 @@ Users see table headers in their configured language (English or Korean), with c
 
 **Why this priority**: Maintains existing bilingual support but applies it to the new table format. Important for user experience consistency but can be implemented after the core table structure.
 
-**Independent Test**: Can be tested by setting LANGUAGE=ko and LANGUAGE=en environment variables and verifying the table headers change accordingly ("신선도/Staleness", "경과/Age", "PR/PR", "리뷰어/Reviewers").
+**Independent Test**: Can be tested by setting LANGUAGE=ko and LANGUAGE=en environment variables and verifying the table headers change accordingly ("신선도/Staleness", "경과/Age", "PR/PR", "리뷰 대기 중/Review awaited").
 
 **Acceptance Scenarios**:
 
-1. **Given** LANGUAGE is set to "ko", **When** the table is rendered, **Then** headers display as "신선도", "경과", "PR", "리뷰어"
-2. **Given** LANGUAGE is set to "en", **When** the table is rendered, **Then** headers display as "Staleness", "Age", "PR", "Reviewers"
+1. **Given** LANGUAGE is set to "ko", **When** the table is rendered, **Then** headers display as "신선도", "경과", "PR", "리뷰 대기 중"
+2. **Given** LANGUAGE is set to "en", **When** the table is rendered, **Then** headers display as "Staleness", "Age", "PR", "Review awaited"
 3. **Given** elapsed time formatting, **When** LANGUAGE is "ko", **Then** time is displayed as "12d" (compact format, same as English for table space efficiency)
 
 ---
@@ -85,7 +85,7 @@ When total PRs exceed the configured limit (default 30), the table displays the 
 - **FR-004**: System MUST format elapsed time in compact days format (e.g., "12d", "5d", "2d") in the second column
 - **FR-005**: System MUST display PR identifier and title in the third column using 2 separate Slack Block Kit blocks: first block contains repo#number as clickable GitHub link, second block contains PR title as plain text (no link)
 - **FR-006**: System MUST display all reviewers as Slack user mentions separated by newlines in the fourth column; when no reviewers are assigned, display single dash "-"
-- **FR-007**: System MUST render table header row with column labels in the configured language (EN: "Staleness", "Age", "PR", "Reviewers" / KO: "신선도", "경과", "PR", "리뷰어")
+- **FR-007**: System MUST render table header row with column labels in the configured language (EN: "Staleness", "Age", "PR", "Review awaited" / KO: "신선도", "경과", "PR", "리뷰 대기 중")
 - **FR-008**: System MUST apply center alignment to the first two columns (staleness emoji and elapsed time) and left alignment to the last two columns (PR details and reviewers)
 - **FR-009**: System MUST respect max_prs_total configuration, truncating the table to show only the stalest N PRs
 - **FR-010**: System MUST display a truncation warning message when PRs are not shown, indicating the count of hidden PRs

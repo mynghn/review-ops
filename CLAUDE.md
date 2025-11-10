@@ -102,7 +102,7 @@ Python 3.12: Follow standard conventions
 6. Column header: "Age" / "경과"
 7. Column header: "PR" / "PR"
 8. Column header: "Author" / "Author" (same English expression used in both languages)
-9. Column header: "Reviewers" / "리뷰어"
+9. Column header: "Review awiaited" / "리뷰 대기 중"
 10. Empty state: "🎉 All clear! No PRs need review" / "🎉 리뷰 대기 중인 PR이 없습니다"
 11. Truncation warning: "⚠️ +{count} more PRs not shown. Check GitHub for full list." / "⚠️ +{count}개 더 있음. 전체 목록은 GitHub에서 확인하세요."
 

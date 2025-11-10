@@ -128,7 +128,7 @@ This document consolidates findings from Phase 0 research to resolve all technic
 | Column 1 header | `Staleness` | `신선도` |
 | Column 2 header | `Age` | `경과` |
 | Column 3 header | `PR` | `PR` |
-| Column 4 header | `Reviewers` | `리뷰어` |
+| Column 4 header | `Review awaited` | `리뷰 대기 중` |
 | Empty state | `🎉 All clear! No PRs need review` | `🎉 리뷰 대기 중인 PR이 없습니다` |
 | Truncation warning | `⚠️ +{count} more PRs not shown. Check GitHub for full list.` | `⚠️ +{count}개 더 있음. 전체 목록은 GitHub에서 확인하세요.` |
 
@@ -141,13 +141,13 @@ def _get_header_text(self, column: str) -> str:
             "staleness": "Staleness",
             "age": "Age",
             "pr": "PR",
-            "reviewers": "Reviewers"
+            "reviewers": "Review awaited"
         },
         "ko": {
             "staleness": "신선도",
             "age": "경과",
             "pr": "PR",
-            "reviewers": "리뷰어"
+            "reviewers": "리뷰 대기 중"
         }
     }
     return headers[self.language][column]

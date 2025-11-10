@@ -85,7 +85,7 @@
                 "elements": [
                   {
                     "type": "text",
-                    "text": "리뷰어",
+                    "text": "리뷰 대기 중",
                     "style": {
                       "bold": true
                     }

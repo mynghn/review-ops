@@ -292,7 +292,7 @@ TRANSLATIONS = {
         "col_staleness": "Staleness",
         "col_age": "Age",
         "col_pr": "PR",
-        "col_reviewers": "Reviewers",
+        "col_reviewers": "Review awaited",
         "empty_state": "🎉 All clear! No PRs need review",
         "truncation_warning": "⚠️ +{count} more PRs not shown. Check GitHub for full list."
     },
@@ -301,7 +301,7 @@ TRANSLATIONS = {
         "col_staleness": "신선도",
         "col_age": "경과",
         "col_pr": "PR",
-        "col_reviewers": "리뷰어",
+        "col_reviewers": "리뷰 대기 중",
         "empty_state": "🎉 리뷰 대기 중인 PR이 없습니다",
         "truncation_warning": "⚠️ +{count}개 더 있음. 전체 목록은 GitHub에서 확인하세요."
     }

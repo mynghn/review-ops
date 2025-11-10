@@ -512,8 +512,8 @@ class SlackClient:
             List of 5 rich_text cells with bold column headers
         """
         headers = {
-            "en": ["Staleness", "Age", "PR", "Author", "Reviewers"],
-            "ko": ["신선도", "경과", "PR", "Author", "리뷰어"],
+            "en": ["Staleness", "Age", "PR", "Author", "Review awaited"],
+            "ko": ["신선도", "경과", "PR", "Author", "리뷰 대기 중"],
         }
 
         header_texts = headers[self.language]

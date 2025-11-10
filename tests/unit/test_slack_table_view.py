@@ -91,7 +91,7 @@ def test_table_header_row_english():
     assert header_row[3]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
     # Column 5: Reviewers
-    assert header_row[4]["elements"][0]["elements"][0]["text"] == "Reviewers"
+    assert header_row[4]["elements"][0]["elements"][0]["text"] == "Review awaited"
     assert header_row[4]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
 
@@ -121,8 +121,8 @@ def test_table_header_row_korean():
     assert header_row[3]["elements"][0]["elements"][0]["text"] == "Author"
     assert header_row[3]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
-    # Column 5: 리뷰어 (Reviewers)
-    assert header_row[4]["elements"][0]["elements"][0]["text"] == "리뷰어"
+    # Column 5: 리뷰 대기 중 (Review awaited)
+    assert header_row[4]["elements"][0]["elements"][0]["text"] == "리뷰 대기 중"
     assert header_row[4]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
 
