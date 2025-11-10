@@ -572,7 +572,7 @@ class SlackClient:
         if author_slack_id:
             author_elements = [{"type": "user", "user_id": author_slack_id}]
         else:
-            author_elements = [{"type": "text", "text": f"@{pr.author}"}]
+            author_elements = [{"type": "text", "text": f"@{pr.author}", "style": {"code": True}}]
         col_author = self._build_rich_text_cell(author_elements)
 
         # Column 5: Reviewers (including GitHub teams)
@@ -686,8 +686,9 @@ class SlackClient:
                 continue
 
             # Add team name prefix with @ and opening parenthesis
-            elements.append({"type": "text", "text": f"@{github_team.team_name} ("})
-
+            elements.append({"type": "text", "text": f"@{github_team.team_name}", "style": {"code": True}})
+            
+            elements.append({"type": "text", "text": f"("})
             # Add team members
             if members_to_display:
                 for j, member in enumerate(members_to_display):

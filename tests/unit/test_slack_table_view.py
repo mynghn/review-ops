@@ -253,21 +253,24 @@ def test_github_team_reviewers_display():
     # Reviewers column (now column 5) should show team name with members
     reviewer_cell = data_row[4]["elements"][0]["elements"]
 
-    # Should have: "@Backend Team (" + user(alice) + ", " + user(bob) + ")"
+    # Should have: "@Backend Team" + "(" + user(alice) + ", " + user(bob) + ")"
     assert reviewer_cell[0]["type"] == "text"
-    assert reviewer_cell[0]["text"] == "@Backend Team ("
+    assert reviewer_cell[0]["text"] == "@Backend Team"
 
-    assert reviewer_cell[1]["type"] == "user"
-    assert reviewer_cell[1]["user_id"] == "U11111"
+    assert reviewer_cell[1]["type"] == "text"
+    assert reviewer_cell[1]["text"] == "("
 
-    assert reviewer_cell[2]["type"] == "text"
-    assert reviewer_cell[2]["text"] == ", "
+    assert reviewer_cell[2]["type"] == "user"
+    assert reviewer_cell[2]["user_id"] == "U11111"
 
-    assert reviewer_cell[3]["type"] == "user"
-    assert reviewer_cell[3]["user_id"] == "U22222"
+    assert reviewer_cell[3]["type"] == "text"
+    assert reviewer_cell[3]["text"] == ", "
 
-    assert reviewer_cell[4]["type"] == "text"
-    assert reviewer_cell[4]["text"] == ")"
+    assert reviewer_cell[4]["type"] == "user"
+    assert reviewer_cell[4]["user_id"] == "U22222"
+
+    assert reviewer_cell[5]["type"] == "text"
+    assert reviewer_cell[5]["text"] == ")"
 
 
 def test_github_team_and_individual_reviewers_with_deduplication():
@@ -304,19 +307,20 @@ def test_github_team_and_individual_reviewers_with_deduplication():
     # Reviewers column (now column 5) should show: @Backend Team (alice, bob), newline, then charlie
     reviewer_cell = data_row[4]["elements"][0]["elements"]
 
-    # Verify team section: "@Backend Team (" + alice + ", " + bob + ")"
-    assert reviewer_cell[0]["text"] == "@Backend Team ("
-    assert reviewer_cell[1]["user_id"] == "U11111"  # alice
-    assert reviewer_cell[2]["text"] == ", "
-    assert reviewer_cell[3]["user_id"] == "U22222"  # bob
-    assert reviewer_cell[4]["text"] == ")"
+    # Verify team section: "@Backend Team" + "(" + alice + ", " + bob + ")"
+    assert reviewer_cell[0]["text"] == "@Backend Team"
+    assert reviewer_cell[1]["text"] == "("
+    assert reviewer_cell[2]["user_id"] == "U11111"  # alice
+    assert reviewer_cell[3]["text"] == ", "
+    assert reviewer_cell[4]["user_id"] == "U22222"  # bob
+    assert reviewer_cell[5]["text"] == ")"
 
     # Newline before individual reviewers
-    assert reviewer_cell[5]["text"] == "\n"
+    assert reviewer_cell[6]["text"] == "\n"
 
     # Only charlie should be shown (alice is deduplicated)
-    assert reviewer_cell[6]["user_id"] == "U33333"  # charlie
-    assert len(reviewer_cell) == 7  # No more elements
+    assert reviewer_cell[7]["user_id"] == "U33333"  # charlie
+    assert len(reviewer_cell) == 8  # No more elements
 
 
 def test_multiple_github_teams():
@@ -356,18 +360,20 @@ def test_multiple_github_teams():
     # Reviewers column (now column 5) should show both teams separated by newline
     reviewer_cell = data_row[4]["elements"][0]["elements"]
 
-    # Team 1: "@Backend Team (" + alice + ")"
-    assert reviewer_cell[0]["text"] == "@Backend Team ("
-    assert reviewer_cell[1]["user_id"] == "U11111"
-    assert reviewer_cell[2]["text"] == ")"
+    # Team 1: "@Backend Team" + "(" + alice + ")"
+    assert reviewer_cell[0]["text"] == "@Backend Team"
+    assert reviewer_cell[1]["text"] == "("
+    assert reviewer_cell[2]["user_id"] == "U11111"
+    assert reviewer_cell[3]["text"] == ")"
 
     # Newline between teams
-    assert reviewer_cell[3]["text"] == "\n"
+    assert reviewer_cell[4]["text"] == "\n"
 
-    # Team 2: "@Frontend Team (" + bob + ")"
-    assert reviewer_cell[4]["text"] == "@Frontend Team ("
-    assert reviewer_cell[5]["user_id"] == "U22222"
-    assert reviewer_cell[6]["text"] == ")"
+    # Team 2: "@Frontend Team" + "(" + bob + ")"
+    assert reviewer_cell[5]["text"] == "@Frontend Team"
+    assert reviewer_cell[6]["text"] == "("
+    assert reviewer_cell[7]["user_id"] == "U22222"
+    assert reviewer_cell[8]["text"] == ")"
 
 
 def test_github_team_with_empty_members():
@@ -397,8 +403,9 @@ def test_github_team_with_empty_members():
     # Reviewers column (now column 5) should show team name with "(no members)"
     reviewer_cell = data_row[4]["elements"][0]["elements"]
 
-    assert reviewer_cell[0]["text"] == "@Backend Team ("
-    assert reviewer_cell[1]["text"] == "no members)"
+    assert reviewer_cell[0]["text"] == "@Backend Team"
+    assert reviewer_cell[1]["text"] == "("
+    assert reviewer_cell[2]["text"] == "no members)"
 
 
 def test_github_team_with_no_slack_ids():
@@ -431,11 +438,12 @@ def test_github_team_with_no_slack_ids():
     # Reviewers column (now column 5) should show team name with @usernames
     reviewer_cell = data_row[4]["elements"][0]["elements"]
 
-    assert reviewer_cell[0]["text"] == "@Backend Team ("
-    assert reviewer_cell[1]["text"] == "@alice"
-    assert reviewer_cell[2]["text"] == ", "
-    assert reviewer_cell[3]["text"] == "@bob"
-    assert reviewer_cell[4]["text"] == ")"
+    assert reviewer_cell[0]["text"] == "@Backend Team"
+    assert reviewer_cell[1]["text"] == "("
+    assert reviewer_cell[2]["text"] == "@alice"
+    assert reviewer_cell[3]["text"] == ", "
+    assert reviewer_cell[4]["text"] == "@bob"
+    assert reviewer_cell[5]["text"] == ")"
 
 
 def test_github_team_with_complete_deduplication():
@@ -471,14 +479,15 @@ def test_github_team_with_complete_deduplication():
     # (no trailing newline, no duplicate reviewers)
     reviewer_cell = data_row[4]["elements"][0]["elements"]
 
-    # Should have: "@Backend Team (" + user(alice) + ", " + user(bob) + ")"
+    # Should have: "@Backend Team" + "(" + user(alice) + ", " + user(bob) + ")"
     # NO trailing newline since all reviewers were deduplicated
-    assert reviewer_cell[0]["text"] == "@Backend Team ("
-    assert reviewer_cell[1]["user_id"] == "U11111"
-    assert reviewer_cell[2]["text"] == ", "
-    assert reviewer_cell[3]["user_id"] == "U22222"
-    assert reviewer_cell[4]["text"] == ")"
-    assert len(reviewer_cell) == 5  # No extra elements (no trailing newline, no duplicates)
+    assert reviewer_cell[0]["text"] == "@Backend Team"
+    assert reviewer_cell[1]["text"] == "("
+    assert reviewer_cell[2]["user_id"] == "U11111"
+    assert reviewer_cell[3]["text"] == ", "
+    assert reviewer_cell[4]["user_id"] == "U22222"
+    assert reviewer_cell[5]["text"] == ")"
+    assert len(reviewer_cell) == 6  # No extra elements (no trailing newline, no duplicates)
 
 
 # === Tests for Non-Team Member Filtering ===
@@ -583,11 +592,12 @@ def test_reviewer_filtering_enabled_filters_github_team_members():
     # Reviewers column should show only team_member in the team
     reviewer_cell = data_row[4]["elements"][0]["elements"]
 
-    # Should have: "@Backend Team (" + team_member + ")" (no non_team_member)
-    assert reviewer_cell[0]["text"] == "@Backend Team ("
-    assert reviewer_cell[1]["user_id"] == "U11111"  # team_member only
-    assert reviewer_cell[2]["text"] == ")"
-    assert len(reviewer_cell) == 3
+    # Should have: "@Backend Team" + "(" + team_member + ")" (no non_team_member)
+    assert reviewer_cell[0]["text"] == "@Backend Team"
+    assert reviewer_cell[1]["text"] == "("
+    assert reviewer_cell[2]["user_id"] == "U11111"  # team_member only
+    assert reviewer_cell[3]["text"] == ")"
+    assert len(reviewer_cell) == 4
 
 
 def test_reviewer_filtering_enabled_skips_empty_github_teams():
@@ -693,14 +703,15 @@ def test_reviewer_filtering_enabled_mixed_team_and_github_teams():
     # Reviewers column should show: @Backend Team (alice) + newline + bob
     reviewer_cell = data_row[4]["elements"][0]["elements"]
 
-    # Team section: "@Backend Team (" + alice + ")" (non_team_member filtered out)
-    assert reviewer_cell[0]["text"] == "@Backend Team ("
-    assert reviewer_cell[1]["user_id"] == "U11111"  # alice
-    assert reviewer_cell[2]["text"] == ")"
+    # Team section: "@Backend Team" + "(" + alice + ")" (non_team_member filtered out)
+    assert reviewer_cell[0]["text"] == "@Backend Team"
+    assert reviewer_cell[1]["text"] == "("
+    assert reviewer_cell[2]["user_id"] == "U11111"  # alice
+    assert reviewer_cell[3]["text"] == ")"
 
     # Newline before individual reviewers
-    assert reviewer_cell[3]["text"] == "\n"
+    assert reviewer_cell[4]["text"] == "\n"
 
     # Only bob shown (another_non_team_member filtered out, alice deduplicated)
-    assert reviewer_cell[4]["user_id"] == "U22222"  # bob
-    assert len(reviewer_cell) == 5
+    assert reviewer_cell[5]["user_id"] == "U22222"  # bob
+    assert len(reviewer_cell) == 6
