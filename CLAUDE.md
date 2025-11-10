@@ -95,7 +95,7 @@ Python 3.12: Follow standard conventions
 
 ### Translation Strings (Table View)
 1. Board title: ":help: yyyy-MM-dd Stale PR Board" / ":help: yyyy-MM-dd 리뷰가 필요한 PR들"
-2. Staleness legend (rotten): ":nauseated_face: Rotten (8d~)" / ":nauseated_face: 부패 중.. (8d~)"
+2. Staleness legend (rotten): ":nauseated_face: Rotten (8d+)" / ":nauseated_face: 부패 중.. (8d+)"
 3. Staleness legend (aging): ":cheese_wedge: Aging (4~7d)" / ":cheese_wedge: 숙성 중.. (4~7d)"
 4. Staleness legend (fresh): ":sparkles: Fresh (~3d)" / ":sparkles: 신규 (~3d)"
 5. Column header: "Staleness" / "신선도"
@@ -112,7 +112,7 @@ Python 3.12: Follow standard conventions
 - Added staleness legend context block to Slack message
   - Added `SlackClient._build_staleness_legend_block()` method for legend generation
   - Legend displays between board header and table with 3 category indicators
-  - Categories shown: Rotten (8d~), Aging (4~7d), Fresh (~3d)
+  - Categories shown: Rotten (8d+), Aging (4~7d), Fresh (~3d)
   - Bilingual support (EN/KO) with workplace-appropriate Korean expressions
   - Updated `SlackClient.build_blocks()` to insert legend block
   - Created 4 new unit tests in `TestBuildStalenessLegendBlock` class

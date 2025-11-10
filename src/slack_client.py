@@ -466,12 +466,12 @@ class SlackClient:
         """
         legends = {
             "en": [
-                ":nauseated_face: Rotten (8d~)",
+                ":nauseated_face: Rotten (8d+)",
                 ":cheese_wedge: Aging (4~7d)",
                 ":sparkles: Fresh (~3d)",
             ],
             "ko": [
-                ":nauseated_face: 부패 중.. (8d~)",
+                ":nauseated_face: 부패 중.. (8d+)",
                 ":cheese_wedge: 숙성 중.. (4~7d)",
                 ":sparkles: 신규 (~3d)",
             ],

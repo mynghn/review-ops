@@ -325,12 +325,12 @@ class TestBuildStalenessLegendBlock:
         block = slack_client_en._build_staleness_legend_block()
         texts = [elem["text"] for elem in block["elements"]]
 
-        assert ":nauseated_face: Rotten (8d~)" in texts
+        assert ":nauseated_face: Rotten (8d+)" in texts
         assert ":cheese_wedge: Aging (4~7d)" in texts
         assert ":sparkles: Fresh (~3d)" in texts
 
         # Verify order: worst to best (rotten -> aging -> fresh)
-        assert texts[0] == ":nauseated_face: Rotten (8d~)"
+        assert texts[0] == ":nauseated_face: Rotten (8d+)"
         assert texts[1] == ":cheese_wedge: Aging (4~7d)"
         assert texts[2] == ":sparkles: Fresh (~3d)"
 
@@ -339,12 +339,12 @@ class TestBuildStalenessLegendBlock:
         block = slack_client_ko._build_staleness_legend_block()
         texts = [elem["text"] for elem in block["elements"]]
 
-        assert ":nauseated_face: 부패 중.. (8d~)" in texts
+        assert ":nauseated_face: 부패 중.. (8d+)" in texts
         assert ":cheese_wedge: 숙성 중.. (4~7d)" in texts
         assert ":sparkles: 신규 (~3d)" in texts
 
         # Verify order: worst to best (rotten -> aging -> fresh)
-        assert texts[0] == ":nauseated_face: 부패 중.. (8d~)"
+        assert texts[0] == ":nauseated_face: 부패 중.. (8d+)"
         assert texts[1] == ":cheese_wedge: 숙성 중.. (4~7d)"
         assert texts[2] == ":sparkles: 신규 (~3d)"
 
