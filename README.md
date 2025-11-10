@@ -2,6 +2,10 @@
 
 Stale PR detection and Slack notification tool for GitHub organizations.
 
+## TODO
+- [ ] Old(30d~) PRs
+- [ ] 2nd App: Review latency rank board
+
 ## Overview
 
 `review-ops` helps teams stay on top of code reviews by automatically detecting pull requests that need attention and sending formatted notifications to Slack. It categorizes PRs by staleness (Fresh, Aging, Rotten) and provides actionable information to improve code review response times.
