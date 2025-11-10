@@ -285,6 +285,9 @@ class SlackClient:
         # Add header block
         blocks.append(self._build_board_header_block())
 
+        # Add staleness legend
+        blocks.append(self._build_staleness_legend_block())
+
         # Build table block
         table_rows = [self._build_table_header_row()]
         for stale_pr in displayed_prs:
@@ -450,6 +453,36 @@ class SlackClient:
         return {
             "type": "header",
             "text": {"type": "plain_text", "text": titles[self.language], "emoji": True},
+        }
+
+    def _build_staleness_legend_block(self) -> dict:
+        """
+        Build context block with staleness category legend.
+
+        Returns:
+            Block Kit context block with emoji legend
+        """
+        legends = {
+            "en": [
+                ":nauseated_face: Rotten (8d~)",
+                ":cheese_wedge: Aging (4~7d)",
+                ":sparkles: Fresh (~3d)",
+            ],
+            "ko": [
+                ":nauseated_face: 부패 중.. (8d~)",
+                ":cheese_wedge: 숙성 중.. (4~7d)",
+                ":sparkles: 신규 (~3d)",
+            ],
+        }
+
+        legend_texts = legends[self.language]
+
+        return {
+            "type": "context",
+            "elements": [
+                {"type": "plain_text", "text": text, "emoji": True}
+                for text in legend_texts
+            ],
         }
 
     def _escape_mrkdwn(self, text: str) -> str:

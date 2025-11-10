@@ -303,6 +303,52 @@ class TestBuildTruncationWarning:
         assert "GitHub에서 확인하세요" in text
 
 
+class TestBuildStalenessLegendBlock:
+    """Tests for _build_staleness_legend_block method."""
+
+    def test_staleness_legend_structure(self, slack_client_en):
+        """Test staleness legend has correct structure."""
+        block = slack_client_en._build_staleness_legend_block()
+        assert block["type"] == "context"
+        assert "elements" in block
+        assert len(block["elements"]) == 3
+
+    def test_staleness_legend_elements_are_plain_text(self, slack_client_en):
+        """Test all legend elements are plain_text with emoji enabled."""
+        block = slack_client_en._build_staleness_legend_block()
+        for element in block["elements"]:
+            assert element["type"] == "plain_text"
+            assert element["emoji"] is True
+
+    def test_staleness_legend_en(self, slack_client_en):
+        """Test English staleness legend content."""
+        block = slack_client_en._build_staleness_legend_block()
+        texts = [elem["text"] for elem in block["elements"]]
+
+        assert ":nauseated_face: Rotten (8d~)" in texts
+        assert ":cheese_wedge: Aging (4~7d)" in texts
+        assert ":sparkles: Fresh (~3d)" in texts
+
+        # Verify order: worst to best (rotten -> aging -> fresh)
+        assert texts[0] == ":nauseated_face: Rotten (8d~)"
+        assert texts[1] == ":cheese_wedge: Aging (4~7d)"
+        assert texts[2] == ":sparkles: Fresh (~3d)"
+
+    def test_staleness_legend_ko(self, slack_client_ko):
+        """Test Korean staleness legend content."""
+        block = slack_client_ko._build_staleness_legend_block()
+        texts = [elem["text"] for elem in block["elements"]]
+
+        assert ":nauseated_face: 부패 중.. (8d~)" in texts
+        assert ":cheese_wedge: 숙성 중.. (4~7d)" in texts
+        assert ":sparkles: 신규 (~3d)" in texts
+
+        # Verify order: worst to best (rotten -> aging -> fresh)
+        assert texts[0] == ":nauseated_face: 부패 중.. (8d~)"
+        assert texts[1] == ":cheese_wedge: 숙성 중.. (4~7d)"
+        assert texts[2] == ":sparkles: 신규 (~3d)"
+
+
 class TestBuildBlocks:
     """Tests for build_blocks method."""
 
@@ -335,13 +381,14 @@ class TestBuildBlocks:
         by_category = {"rotten": [sample_stale_pr], "aging": [], "fresh": []}
         blocks = slack_client_en.build_blocks(by_category, sample_team)
 
-        # Should have board header + table (table view format)
-        assert len(blocks) == 2
+        # Should have board header + legend + table (table view format)
+        assert len(blocks) == 3
         assert blocks[0]["type"] == "header"
         assert blocks[0]["text"]["text"] == ":calendar: Code Review Board"
-        assert blocks[1]["type"] == "table"
+        assert blocks[1]["type"] == "context"
+        assert blocks[2]["type"] == "table"
         # Table should have 1 header row + 1 data row
-        assert len(blocks[1]["rows"]) == 2
+        assert len(blocks[2]["rows"]) == 2
 
     def test_build_blocks_multiple_categories(self, slack_client_en, sample_stale_pr, sample_team):
         """Test building blocks with multiple categories (table view format)."""
@@ -352,12 +399,13 @@ class TestBuildBlocks:
         }
         blocks = slack_client_en.build_blocks(by_category, sample_team)
 
-        # Should have: board header + table (all PRs in single table)
-        assert len(blocks) == 2
+        # Should have: board header + legend + table (all PRs in single table)
+        assert len(blocks) == 3
         assert blocks[0]["type"] == "header"
-        assert blocks[1]["type"] == "table"
+        assert blocks[1]["type"] == "context"
+        assert blocks[2]["type"] == "table"
         # Table should have 1 header row + 3 data rows
-        assert len(blocks[1]["rows"]) == 4
+        assert len(blocks[2]["rows"]) == 4
 
     def test_build_blocks_skips_empty_categories(
         self, slack_client_en, sample_stale_pr, sample_team
@@ -366,12 +414,13 @@ class TestBuildBlocks:
         by_category = {"rotten": [], "aging": [sample_stale_pr], "fresh": []}
         blocks = slack_client_en.build_blocks(by_category, sample_team)
 
-        # Should have board header + table with single PR
-        assert len(blocks) == 2
+        # Should have board header + legend + table with single PR
+        assert len(blocks) == 3
         assert blocks[0]["type"] == "header"
         assert blocks[0]["text"]["text"] == ":calendar: Code Review Board"
-        assert blocks[1]["type"] == "table"
-        assert len(blocks[1]["rows"]) == 2  # 1 header + 1 data row
+        assert blocks[1]["type"] == "context"
+        assert blocks[2]["type"] == "table"
+        assert len(blocks[2]["rows"]) == 2  # 1 header + 1 data row
 
 
 class TestPostStalePRSummary:
@@ -450,13 +499,14 @@ class TestPostStalePRSummary:
             call_args = mock_post.call_args
             blocks = call_args[1]["json"]["blocks"]
 
-            # Should have board header + table
-            assert len(blocks) == 2
+            # Should have board header + legend + table
+            assert len(blocks) == 3
             assert blocks[0]["type"] == "header"
             assert blocks[0]["text"]["text"] == ":calendar: Code Review Board"
-            assert blocks[1]["type"] == "table"
+            assert blocks[1]["type"] == "context"
+            assert blocks[2]["type"] == "table"
             # Table should have 1 header + 2 data rows (sorted by staleness descending)
-            assert len(blocks[1]["rows"]) == 3
+            assert len(blocks[2]["rows"]) == 3
 
 
 class TestTruncation:
@@ -492,17 +542,18 @@ class TestTruncation:
         )
         blocks = slack_client_limited.build_blocks(by_category, sample_team)
 
-        # Should have: board header + table + truncation warning
-        assert len(blocks) == 3
+        # Should have: board header + legend + table + truncation warning
+        assert len(blocks) == 4
         assert blocks[0]["type"] == "header"
-        assert blocks[1]["type"] == "table"
+        assert blocks[1]["type"] == "context"  # legend
+        assert blocks[2]["type"] == "table"
 
         # Table should have 11 rows: 1 header + 10 data rows (truncated)
-        assert len(blocks[1]["rows"]) == 11
+        assert len(blocks[2]["rows"]) == 11
 
         # Find context block (truncation warning)
-        assert blocks[2]["type"] == "context"
-        warning_text = blocks[2]["elements"][0]["text"]
+        assert blocks[3]["type"] == "context"
+        warning_text = blocks[3]["elements"][0]["text"]
         assert "+10" in warning_text  # 20 - 10 = 10
 
 

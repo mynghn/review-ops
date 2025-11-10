@@ -74,16 +74,27 @@ Python 3.12: Follow standard conventions
 
 ### Translation Strings (Table View)
 1. Board title: ":calendar: Code Review Board" / ":calendar: 코드 리뷰 현황판"
-2. Column header: "Staleness" / "신선도"
-3. Column header: "Age" / "경과"
-4. Column header: "PR" / "PR"
-5. Column header: "Author" / "Author" (same English expression used in both languages)
-6. Column header: "Reviewers" / "리뷰어"
-7. Empty state: "🎉 All clear! No PRs need review" / "🎉 리뷰 대기 중인 PR이 없습니다"
-8. Truncation warning: "⚠️ +{count} more PRs not shown. Check GitHub for full list." / "⚠️ +{count}개 더 있음. 전체 목록은 GitHub에서 확인하세요."
+2. Staleness legend (rotten): ":nauseated_face: Rotten (8d~)" / ":nauseated_face: 부패 중.. (8d~)"
+3. Staleness legend (aging): ":cheese_wedge: Aging (4~7d)" / ":cheese_wedge: 숙성 중.. (4~7d)"
+4. Staleness legend (fresh): ":sparkles: Fresh (~3d)" / ":sparkles: 신규 (~3d)"
+5. Column header: "Staleness" / "신선도"
+6. Column header: "Age" / "경과"
+7. Column header: "PR" / "PR"
+8. Column header: "Author" / "Author" (same English expression used in both languages)
+9. Column header: "Reviewers" / "리뷰어"
+10. Empty state: "🎉 All clear! No PRs need review" / "🎉 리뷰 대기 중인 PR이 없습니다"
+11. Truncation warning: "⚠️ +{count} more PRs not shown. Check GitHub for full list." / "⚠️ +{count}개 더 있음. 전체 목록은 GitHub에서 확인하세요."
 
 ## Recent Changes
 
+- Added staleness legend context block to Slack message
+  - Added `SlackClient._build_staleness_legend_block()` method for legend generation
+  - Legend displays between board header and table with 3 category indicators
+  - Categories shown: Rotten (8d~), Aging (4~7d), Fresh (~3d)
+  - Bilingual support (EN/KO) with workplace-appropriate Korean expressions
+  - Updated `SlackClient.build_blocks()` to insert legend block
+  - Created 4 new unit tests in `TestBuildStalenessLegendBlock` class
+  - Updated 5 existing tests to expect new block structure
 - 004-table-view-ui: Added Author column to table view UI
   - Updated table layout from 4 columns to 5 columns (Staleness, Age, PR, Author, Reviewers)
   - Author column uses same English expression for both EN and KO languages
