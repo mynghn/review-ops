@@ -291,12 +291,13 @@ class SlackClient:
 
         # Build table block
         table_rows = [self._build_table_header_row()]
-        for stale_pr in displayed_prs:
-            table_rows.append(self._build_table_data_row(stale_pr, team_members))
+        for idx, stale_pr in enumerate(displayed_prs, start=1):
+            table_rows.append(self._build_table_data_row(stale_pr, team_members, idx))
 
         table_block = {
             "type": "table",
             "column_settings": [
+                {"align": "center"},  # Index
                 {"align": "center"},  # Staleness
                 {"align": "center"},  # Age
                 {"align": "left"},  # PR
@@ -509,11 +510,11 @@ class SlackClient:
         Build table header row with bilingual column labels.
 
         Returns:
-            List of 5 rich_text cells with bold column headers
+            List of 6 rich_text cells with bold column headers
         """
         headers = {
-            "en": ["Staleness", "Age", "PR", "Author", "Review awaited"],
-            "ko": ["신선도", "경과", "PR", "Author", "리뷰 대기 중"],
+            "en": ["#", "Staleness", "Age", "PR", "Author", "Review awaited"],
+            "ko": ["#", "신선도", "경과", "PR", "Author", "리뷰 대기 중"],
         }
 
         header_texts = headers[self.language]
@@ -532,7 +533,7 @@ class SlackClient:
         ]
 
     def _build_table_data_row(
-        self, stale_pr: StalePR, team_members: list[TeamMember]
+        self, stale_pr: StalePR, team_members: list[TeamMember], index: int
     ) -> list[dict]:
         """
         Build table data row for a single PR.
@@ -540,9 +541,10 @@ class SlackClient:
         Args:
             stale_pr: The stale PR to format
             team_members: List of team members for Slack user ID mapping
+            index: Row index number to display
 
         Returns:
-            List of 5 rich_text cells representing one table row
+            List of 6 rich_text cells representing one table row
         """
         pr = stale_pr.pr
 
@@ -553,15 +555,18 @@ class SlackClient:
             if member.slack_user_id
         }
 
-        # Column 1: Staleness emoji
+        # Column 1: Index
+        col_index = self._build_rich_text_cell([{"type": "text", "text": str(index)}])
+
+        # Column 2: Staleness emoji
         emoji_name = self._get_staleness_emoji(stale_pr.category)
         col_staleness = self._build_rich_text_cell([{"type": "emoji", "name": emoji_name}])
 
-        # Column 2: Age
+        # Column 3: Age
         age_text = f"{int(stale_pr.staleness_days)}d"
         col_age = self._build_rich_text_cell([{"type": "text", "text": age_text}])
 
-        # Column 3: PR details (repo#number + link)
+        # Column 4: PR details (repo#number + link)
         pr_elements = [
             {"type": "text", "text": _abbreviate(pr.title, max_length=50), "style": {"italic": True}},
             {"type": "text", "text": "\n"},
@@ -569,7 +574,7 @@ class SlackClient:
         ]
         col_pr = self._build_rich_text_cell(pr_elements)
 
-        # Column 4: Author
+        # Column 5: Author
         author_slack_id = username_to_slack_id.get(pr.author)
         if author_slack_id:
             author_elements = [{"type": "user", "user_id": author_slack_id}]
@@ -577,11 +582,11 @@ class SlackClient:
             author_elements = [{"type": "text", "text": f"@{pr.author}", "style": {"code": True}}]
         col_author = self._build_rich_text_cell(author_elements)
 
-        # Column 5: Reviewers (including GitHub teams)
+        # Column 6: Reviewers (including GitHub teams)
         reviewer_elements = self._build_reviewer_elements(pr, team_members)
         col_reviewers = self._build_rich_text_cell(reviewer_elements)
 
-        return [col_staleness, col_age, col_pr, col_author, col_reviewers]
+        return [col_index, col_staleness, col_age, col_pr, col_author, col_reviewers]
 
     def _get_staleness_emoji(self, category: str) -> str:
         """

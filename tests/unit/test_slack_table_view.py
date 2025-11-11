@@ -69,30 +69,37 @@ def test_table_header_row_english():
     header_row = client._build_table_header_row()
 
     # Assert header cells
-    assert len(header_row) == 5
+    assert len(header_row) == 6
 
-    # Column 1: Staleness
+    # Column 1: Index
     assert header_row[0]["type"] == "rich_text"
     assert header_row[0]["elements"][0]["type"] == "rich_text_section"
     assert header_row[0]["elements"][0]["elements"][0]["type"] == "text"
-    assert header_row[0]["elements"][0]["elements"][0]["text"] == "Staleness"
+    assert header_row[0]["elements"][0]["elements"][0]["text"] == "#"
     assert header_row[0]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
-    # Column 2: Age
-    assert header_row[1]["elements"][0]["elements"][0]["text"] == "Age"
+    # Column 2: Staleness
+    assert header_row[1]["type"] == "rich_text"
+    assert header_row[1]["elements"][0]["type"] == "rich_text_section"
+    assert header_row[1]["elements"][0]["elements"][0]["type"] == "text"
+    assert header_row[1]["elements"][0]["elements"][0]["text"] == "Staleness"
     assert header_row[1]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
-    # Column 3: PR
-    assert header_row[2]["elements"][0]["elements"][0]["text"] == "PR"
+    # Column 3: Age
+    assert header_row[2]["elements"][0]["elements"][0]["text"] == "Age"
     assert header_row[2]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
-    # Column 4: Author
-    assert header_row[3]["elements"][0]["elements"][0]["text"] == "Author"
+    # Column 4: PR
+    assert header_row[3]["elements"][0]["elements"][0]["text"] == "PR"
     assert header_row[3]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
-    # Column 5: Reviewers
-    assert header_row[4]["elements"][0]["elements"][0]["text"] == "Review awaited"
+    # Column 5: Author
+    assert header_row[4]["elements"][0]["elements"][0]["text"] == "Author"
     assert header_row[4]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
+
+    # Column 6: Reviewers
+    assert header_row[5]["elements"][0]["elements"][0]["text"] == "Review awaited"
+    assert header_row[5]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
 
 def test_table_header_row_korean():
@@ -103,27 +110,31 @@ def test_table_header_row_korean():
     header_row = client._build_table_header_row()
 
     # Assert header cells with Korean labels
-    assert len(header_row) == 5
+    assert len(header_row) == 6
 
-    # Column 1: 신선도 (Staleness)
-    assert header_row[0]["elements"][0]["elements"][0]["text"] == "신선도"
+    # Column 1: # (Index)
+    assert header_row[0]["elements"][0]["elements"][0]["text"] == "#"
     assert header_row[0]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
-    # Column 2: 경과 (Age)
-    assert header_row[1]["elements"][0]["elements"][0]["text"] == "경과"
+    # Column 2: 신선도 (Staleness)
+    assert header_row[1]["elements"][0]["elements"][0]["text"] == "신선도"
     assert header_row[1]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
-    # Column 3: PR
-    assert header_row[2]["elements"][0]["elements"][0]["text"] == "PR"
+    # Column 3: 경과 (Age)
+    assert header_row[2]["elements"][0]["elements"][0]["text"] == "경과"
     assert header_row[2]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
-    # Column 4: Author
-    assert header_row[3]["elements"][0]["elements"][0]["text"] == "Author"
+    # Column 4: PR
+    assert header_row[3]["elements"][0]["elements"][0]["text"] == "PR"
     assert header_row[3]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
-    # Column 5: 리뷰 대기 중 (Review awaited)
-    assert header_row[4]["elements"][0]["elements"][0]["text"] == "리뷰 대기 중"
+    # Column 5: Author
+    assert header_row[4]["elements"][0]["elements"][0]["text"] == "Author"
     assert header_row[4]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
+
+    # Column 6: 리뷰 대기 중 (Review awaited)
+    assert header_row[5]["elements"][0]["elements"][0]["text"] == "리뷰 대기 중"
+    assert header_row[5]["elements"][0]["elements"][0].get("style", {}).get("bold") is True
 
 
 # === Tests for Data Row (TDD: Write tests FIRST) ===
@@ -151,23 +162,29 @@ def test_table_data_row_structure():
     ]
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, team_members)
+    data_row = client._build_table_data_row(stale_pr, team_members, index=1)
 
-    # Verify we have 5 columns
-    assert len(data_row) == 5
+    # Verify we have 6 columns
+    assert len(data_row) == 6
 
-    # Column 1: Staleness emoji
+    # Column 1: Index
     assert data_row[0]["type"] == "rich_text"
     assert data_row[0]["elements"][0]["type"] == "rich_text_section"
-    assert data_row[0]["elements"][0]["elements"][0]["type"] == "emoji"
-    assert data_row[0]["elements"][0]["elements"][0]["name"] == "nauseated_face"
+    assert data_row[0]["elements"][0]["elements"][0]["type"] == "text"
+    assert data_row[0]["elements"][0]["elements"][0]["text"] == "1"
 
-    # Column 2: Age
-    assert data_row[1]["elements"][0]["elements"][0]["type"] == "text"
-    assert data_row[1]["elements"][0]["elements"][0]["text"] == "12d"
+    # Column 2: Staleness emoji
+    assert data_row[1]["type"] == "rich_text"
+    assert data_row[1]["elements"][0]["type"] == "rich_text_section"
+    assert data_row[1]["elements"][0]["elements"][0]["type"] == "emoji"
+    assert data_row[1]["elements"][0]["elements"][0]["name"] == "nauseated_face"
 
-    # Column 3: PR details (repo#number + link)
-    pr_cell_elements = data_row[2]["elements"][0]["elements"]
+    # Column 3: Age
+    assert data_row[2]["elements"][0]["elements"][0]["type"] == "text"
+    assert data_row[2]["elements"][0]["elements"][0]["text"] == "12d"
+
+    # Column 4: PR details (repo#number + link)
+    pr_cell_elements = data_row[3]["elements"][0]["elements"]
     assert len(pr_cell_elements) == 3
     assert pr_cell_elements[2]["type"] == "link"
     assert pr_cell_elements[2]["text"] == "test-repo#123"
@@ -177,14 +194,14 @@ def test_table_data_row_structure():
     assert pr_cell_elements[0]["type"] == "text"
     assert pr_cell_elements[0]["text"] == "Test PR Title"
 
-    # Column 4: Author
-    author_cell_elements = data_row[3]["elements"][0]["elements"]
+    # Column 5: Author
+    author_cell_elements = data_row[4]["elements"][0]["elements"]
     assert len(author_cell_elements) == 1
     assert author_cell_elements[0]["type"] == "user"
     assert author_cell_elements[0]["user_id"] == "U11111"
 
-    # Column 5: Reviewers (user mentions separated by newlines)
-    reviewer_cell_elements = data_row[4]["elements"][0]["elements"]
+    # Column 6: Reviewers (user mentions separated by newlines)
+    reviewer_cell_elements = data_row[5]["elements"][0]["elements"]
     assert len(reviewer_cell_elements) == 3  # user1, newline, user2
     assert reviewer_cell_elements[0]["type"] == "user"
     assert reviewer_cell_elements[0]["user_id"] == "U12345"
@@ -209,10 +226,10 @@ def test_table_no_reviewers():
     stale_pr = StalePR(pr=pr, staleness_days=5.0)  # 5 days -> "aging" category
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, [])
+    data_row = client._build_table_data_row(stale_pr, [], index=1)
 
-    # Reviewers column (now column 5) should have single dash
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    # Reviewers column (now column 6) should have single dash
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
     assert len(reviewer_cell) == 1
     assert reviewer_cell[0]["type"] == "text"
     assert reviewer_cell[0]["text"] == "-"
@@ -248,10 +265,10 @@ def test_github_team_reviewers_display():
     ]
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, team_members)
+    data_row = client._build_table_data_row(stale_pr, team_members, index=1)
 
-    # Reviewers column (now column 5) should show team name with members
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    # Reviewers column (now column 6) should show team name with members
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
 
     # Should have: "@Backend Team" + "(" + user(alice) + ", " + user(bob) + ")"
     assert reviewer_cell[0]["type"] == "text"
@@ -302,10 +319,10 @@ def test_github_team_and_individual_reviewers_with_deduplication():
     ]
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, team_members)
+    data_row = client._build_table_data_row(stale_pr, team_members, index=1)
 
-    # Reviewers column (now column 5) should show: @Backend Team (alice, bob), newline, then charlie
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    # Reviewers column (now column 6) should show: @Backend Team (alice, bob), newline, then charlie
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
 
     # Verify team section: "@Backend Team" + "(" + alice + ", " + bob + ")"
     assert reviewer_cell[0]["text"] == "@Backend Team"
@@ -355,10 +372,10 @@ def test_multiple_github_teams():
     ]
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, team_members)
+    data_row = client._build_table_data_row(stale_pr, team_members, index=1)
 
-    # Reviewers column (now column 5) should show both teams separated by newline
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    # Reviewers column (now column 6) should show both teams separated by newline
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
 
     # Team 1: "@Backend Team" + "(" + alice + ")"
     assert reviewer_cell[0]["text"] == "@Backend Team"
@@ -398,10 +415,10 @@ def test_github_team_with_empty_members():
     stale_pr = StalePR(pr=pr, staleness_days=5.0)
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, [])
+    data_row = client._build_table_data_row(stale_pr, [], index=1)
 
-    # Reviewers column (now column 5) should show team name with "(no members)"
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    # Reviewers column (now column 6) should show team name with "(no members)"
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
 
     assert reviewer_cell[0]["text"] == "@Backend Team"
     assert reviewer_cell[1]["text"] == "("
@@ -433,10 +450,10 @@ def test_github_team_with_no_slack_ids():
     team_members = []
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, team_members)
+    data_row = client._build_table_data_row(stale_pr, team_members, index=1)
 
-    # Reviewers column (now column 5) should show team name with @usernames
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    # Reviewers column (now column 6) should show team name with @usernames
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
 
     assert reviewer_cell[0]["text"] == "@Backend Team"
     assert reviewer_cell[1]["text"] == "("
@@ -473,11 +490,11 @@ def test_github_team_with_complete_deduplication():
     ]
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, team_members)
+    data_row = client._build_table_data_row(stale_pr, team_members, index=1)
 
-    # Reviewers column (now column 5) should show only team
+    # Reviewers column (now column 6) should show only team
     # (no trailing newline, no duplicate reviewers)
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
 
     # Should have: "@Backend Team" + "(" + user(alice) + ", " + user(bob) + ")"
     # NO trailing newline since all reviewers were deduplicated
@@ -514,10 +531,10 @@ def test_reviewer_filtering_disabled_shows_all_reviewers():
     ]
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, team_members)
+    data_row = client._build_table_data_row(stale_pr, team_members, index=1)
 
     # Reviewers column should show BOTH reviewers
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
 
     # Should have: team_member mention + newline + @non_team_member (fallback)
     assert reviewer_cell[0]["type"] == "user"
@@ -547,10 +564,10 @@ def test_reviewer_filtering_enabled_filters_individual_reviewers():
     ]
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, team_members)
+    data_row = client._build_table_data_row(stale_pr, team_members, index=1)
 
     # Reviewers column should show ONLY team_member
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
 
     # Should have: only team_member mention (no non_team_member)
     assert len(reviewer_cell) == 1
@@ -587,10 +604,10 @@ def test_reviewer_filtering_enabled_filters_github_team_members():
     ]
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, team_members)
+    data_row = client._build_table_data_row(stale_pr, team_members, index=1)
 
     # Reviewers column should show only team_member in the team
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
 
     # Should have: "@Backend Team" + "(" + team_member + ")" (no non_team_member)
     assert reviewer_cell[0]["text"] == "@Backend Team"
@@ -629,10 +646,10 @@ def test_reviewer_filtering_enabled_skips_empty_github_teams():
     ]
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, team_members)
+    data_row = client._build_table_data_row(stale_pr, team_members, index=1)
 
     # Reviewers column should show dash (team is completely filtered out)
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
 
     assert len(reviewer_cell) == 1
     assert reviewer_cell[0]["text"] == "-"
@@ -659,10 +676,10 @@ def test_reviewer_filtering_enabled_all_reviewers_filtered():
     ]
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, team_members)
+    data_row = client._build_table_data_row(stale_pr, team_members, index=1)
 
     # Reviewers column should show dash
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
 
     assert len(reviewer_cell) == 1
     assert reviewer_cell[0]["text"] == "-"
@@ -698,10 +715,10 @@ def test_reviewer_filtering_enabled_mixed_team_and_github_teams():
     ]
 
     # Test the method directly
-    data_row = client._build_table_data_row(stale_pr, team_members)
+    data_row = client._build_table_data_row(stale_pr, team_members, index=1)
 
     # Reviewers column should show: @Backend Team (alice) + newline + bob
-    reviewer_cell = data_row[4]["elements"][0]["elements"]
+    reviewer_cell = data_row[5]["elements"][0]["elements"]
 
     # Team section: "@Backend Team" + "(" + alice + ")" (non_team_member filtered out)
     assert reviewer_cell[0]["text"] == "@Backend Team"
