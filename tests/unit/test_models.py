@@ -169,7 +169,7 @@ def test_stale_pr_category_fresh():
 
 
 def test_stale_pr_category_aging():
-    """Test StalePR.category for aging PRs (4-7 days)."""
+    """Test StalePR.category for aging PRs (4-10 days)."""
     pr = PullRequest(
         repo_name="test-repo",
         number=1,
@@ -192,13 +192,17 @@ def test_stale_pr_category_aging():
     stale_pr = StalePR(pr=pr, staleness_days=7.0)
     assert stale_pr.category == "aging"
 
-    # 7.99 days (edge case)
-    stale_pr = StalePR(pr=pr, staleness_days=7.99)
+    # 10 days
+    stale_pr = StalePR(pr=pr, staleness_days=10.0)
+    assert stale_pr.category == "aging"
+
+    # 10.99 days (edge case)
+    stale_pr = StalePR(pr=pr, staleness_days=10.99)
     assert stale_pr.category == "aging"
 
 
 def test_stale_pr_category_rotten():
-    """Test StalePR.category for rotten PRs (8+ days)."""
+    """Test StalePR.category for rotten PRs (11+ days)."""
     pr = PullRequest(
         repo_name="test-repo",
         number=1,
@@ -213,8 +217,8 @@ def test_stale_pr_category_rotten():
         base_branch="main",
     )
 
-    # 8 days
-    stale_pr = StalePR(pr=pr, staleness_days=8.0)
+    # 11 days
+    stale_pr = StalePR(pr=pr, staleness_days=11.0)
     assert stale_pr.category == "rotten"
 
     # 30 days
@@ -247,5 +251,5 @@ def test_stale_pr_emoji():
     assert stale_pr_aging.emoji == "🧀"
 
     # Rotten emoji
-    stale_pr_rotten = StalePR(pr=pr, staleness_days=10.0)
+    stale_pr_rotten = StalePR(pr=pr, staleness_days=15.0)
     assert stale_pr_rotten.emoji == "🤢"

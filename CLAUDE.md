@@ -9,6 +9,7 @@ Auto-generated from all feature plans. Last updated: 2025-10-31
 - Python 3.12 (existing) + requests (existing), Slack Block Kit API (JSON format - no new libraries) (004-table-view-ui)
 - N/A (stateless CLI application, in-memory processing only) (004-table-view-ui)
 - Python 3.12 (existing) + requests, PyGithub, gh CLI (existing), Slack Block Kit (JSON format) (005-refine-review-filter)
+- Python 3.12 + holidays library (>=0.56) for business day calculations (006-business-day-staleness)
 
 ## Project Structure
 
@@ -93,10 +94,33 @@ Python 3.12: Follow standard conventions
 - Configure via `LANGUAGE` environment variable in `.env`
 - Supported values: `'en'` or `'ko'` (case-insensitive)
 
+### Business Day Staleness Calculation (006-business-day-staleness)
+- **Business day counting**: Staleness calculated in business days (Mon-Fri), excluding weekends and holidays
+- **Holiday calendar**: Uses `holidays` library with configurable country/region via `HOLIDAYS_COUNTRY` env var
+- **Updated thresholds**:
+  - Fresh: 0-3 business days (unchanged threshold, but now business days)
+  - Aging: 4-10 business days (increased from 4-7 to account for business days)
+  - Rotten: 11+ business days (increased from 8+ to account for business days)
+- **Fractional business days**: Supports partial business days (e.g., 1.5 days = 1 day + 12 business hours)
+- **Weekend handling**: PRs created/updated on weekends start counting from next business day
+- **Holiday support**: Configurable by country code (US, KR, GB, CA, etc.)
+- **Configuration**:
+  - `HOLIDAYS_COUNTRY` environment variable (default: "US")
+  - Supported country codes: US, GB, CA, AU, FR, DE, JP, KR, CN, IN, BR, MX, and more
+  - See https://pypi.org/project/holidays/ for full list of supported countries
+
+#### Implementation Details
+- **Helper function**: `_count_business_days()` in `staleness.py` handles business day calculation
+- **Core calculation**: `calculate_staleness()` now accepts `country` parameter for holiday calendar
+- **Date iteration**: Iterates through each day, skipping weekends (Sat/Sun) and country-specific holidays
+- **Fractional handling**: Calculates partial business days at start/end of time range
+- **Model updates**: `StalePR.category` property thresholds updated to 4/11 (from 4/8)
+- **UI updates**: Slack legend updated to reflect new thresholds (11d+, 4~10d)
+
 ### Translation Strings (Table View)
 1. Board title: "[yyyy-MM-dd] Stale PR Board :help:" / "[yyyy-MM-dd] 리뷰가 필요한 PR들 :help:"
-2. Staleness legend (rotten): ":nauseated_face: Rotten (8d+)" / ":nauseated_face: 부패 중.. (8d+)"
-3. Staleness legend (aging): ":cheese_wedge: Aging (4~7d)" / ":cheese_wedge: 숙성 중.. (4~7d)"
+2. Staleness legend (rotten): ":nauseated_face: Rotten (11d+)" / ":nauseated_face: 부패 중.. (11d+)"
+3. Staleness legend (aging): ":cheese_wedge: Aging (4~10d)" / ":cheese_wedge: 숙성 중.. (4~10d)"
 4. Staleness legend (fresh): ":sparkles: Fresh (~3d)" / ":sparkles: 신규 (~3d)"
 5. Column header: "Staleness" / "신선도"
 6. Column header: "Age" / "경과"
@@ -107,6 +131,17 @@ Python 3.12: Follow standard conventions
 11. Truncation warning: "⚠️ +{count} more PRs not shown. Check GitHub for full list." / "⚠️ +{count}개 더 있음. 전체 목록은 GitHub에서 확인하세요."
 
 ## Recent Changes
+- 006-business-day-staleness: Implemented business day staleness calculation
+  - Added `holidays>=0.56` library dependency in `pyproject.toml`
+  - Added `HOLIDAYS_COUNTRY` configuration field in `src/config.py` with validation
+  - Created `_count_business_days()` helper function in `src/staleness.py`
+  - Updated `calculate_staleness()` to accept `country` parameter and use business days
+  - Updated `StalePR.category` thresholds from 4/8 to 4/11 business days
+  - Updated staleness legend text from "8d+/4~7d" to "11d+/4~10d" in EN and KO
+  - Updated all unit tests for business day logic and new thresholds
+  - Updated app.py to pass `config.holidays_country` to `calculate_staleness()`
+  - Business days exclude weekends (Sat/Sun) and country-specific holidays
+  - Supports fractional business days for precise staleness tracking
 - 005-refine-review-filter: Added Python 3.12 (existing) + requests, PyGithub, gh CLI (existing), Slack Block Kit (JSON format)
 
 - Added staleness legend context block to Slack message

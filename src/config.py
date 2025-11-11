@@ -101,6 +101,23 @@ def load_config() -> Config:
         raise ValueError(msg)
     show_non_team_reviewers = show_non_team_reviewers_str == "true"
 
+    # Holidays country configuration for business day calculation
+    # Common country codes: US, GB, CA, AU, FR, DE, JP, KR, CN, IN, BR, MX, etc.
+    # See https://pypi.org/project/holidays/ for full list of supported countries
+    holidays_country = os.getenv("HOLIDAYS_COUNTRY", "US").upper()
+    # Validate by attempting to import the country's holiday calendar
+    try:
+        import holidays as holidays_lib
+        _ = holidays_lib.country_holidays(holidays_country)
+    except NotImplementedError:
+        msg = (
+            f"Invalid HOLIDAYS_COUNTRY '{holidays_country}'. "
+            "Must be a valid country code supported by the holidays library. "
+            "Common codes: US, GB, CA, AU, FR, DE, JP, KR, CN, IN, BR, MX. "
+            "See https://pypi.org/project/holidays/ for full list."
+        )
+        raise ValueError(msg)
+
     # Rate limiting configuration
     max_prs_total_str = os.getenv("MAX_PRS_TOTAL", "30")
     try:
@@ -138,6 +155,7 @@ def load_config() -> Config:
         max_prs_total=max_prs_total,
         rate_limit_wait_threshold=rate_limit_wait_threshold,
         show_non_team_reviewers=show_non_team_reviewers,
+        holidays_country=holidays_country,
     )
 
 

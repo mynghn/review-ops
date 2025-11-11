@@ -8,6 +8,7 @@ dependencies = [
     "PyGithub>=2.1",
     "requests>=2.31",
     "python-dotenv>=1.0",
+    "holidays>=0.56",
 ]
 
 [tool.pytest.ini_options]

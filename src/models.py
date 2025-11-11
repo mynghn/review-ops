@@ -106,7 +106,8 @@ class StalePR:
 
     staleness_days: float
     """
-    Number of days the PR has been without sufficient approval.
+    Number of business days the PR has been without sufficient approval.
+    Business days exclude weekends (Sat/Sun) and holidays.
     Calculated from the most recent of:
     - When PR was marked ready for review
     - When PR lost approval (new commits after approval)
@@ -115,12 +116,12 @@ class StalePR:
     @property
     def category(self) -> Literal["fresh", "aging", "rotten"]:
         """
-        Categorize staleness level:
-        - fresh: 1-3 days
-        - aging: 4-7 days
-        - rotten: 8+ days
+        Categorize staleness level (business days):
+        - fresh: 0-3 days
+        - aging: 4-10 days
+        - rotten: 11+ days
         """
-        if self.staleness_days >= 8:
+        if self.staleness_days >= 11:
             return "rotten"
         elif self.staleness_days >= 4:
             return "aging"
@@ -130,10 +131,10 @@ class StalePR:
     @property
     def emoji(self) -> str:
         """
-        Get emoji representing staleness category:
-        - ✨ (sparkles): fresh (1-3 days)
-        - 🧀 (cheese): aging (4-7 days)
-        - 🤢 (nauseated face): rotten (8+ days)
+        Get emoji representing staleness category (business days):
+        - ✨ (sparkles): fresh (0-3 days)
+        - 🧀 (cheese): aging (4-10 days)
+        - 🤢 (nauseated face): rotten (11+ days)
         """
         category_emojis = {
             "fresh": "✨",
@@ -173,6 +174,9 @@ class Config:
 
     show_non_team_reviewers: bool = True
     """Whether to show non-team member reviewers in table"""
+
+    holidays_country: str = "US"
+    """Country code for holiday calendar used in business day calculation (e.g., 'US', 'KR')"""
 
 
 @dataclass

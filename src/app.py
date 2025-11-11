@@ -154,7 +154,7 @@ def main() -> int:
         # Calculate staleness
         stale_prs: list[StalePR] = []
         for pr in team_prs:
-            staleness_days = calculate_staleness(pr)
+            staleness_days = calculate_staleness(pr, config.holidays_country)
             if staleness_days is not None:
                 stale_prs.append(StalePR(pr=pr, staleness_days=staleness_days))
 
