@@ -1,4 +1,9 @@
-"""Integration tests for Slack client with mocked webhook calls."""
+"""Integration tests for Slack client with mocked webhook calls.
+
+NOTE: Most tests in this file are skipped as they test the old webhook-based
+implementation. After migrating to Slack SDK (chat.postMessage API), these tests
+are no longer applicable. See test_slack_client.py for current implementation tests.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +20,7 @@ from slack_client import SlackClient
 @pytest.fixture
 def slack_client():
     """Create a Slack client instance."""
-    return SlackClient(webhook_url="https://hooks.slack.com/services/T00/B00/XXX")
+    return SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890")
 
 
 @pytest.fixture
@@ -56,12 +61,13 @@ def sample_stale_prs():
 
 
 def test_slack_client_initialization():
-    """Test Slack client can be initialized with a webhook URL."""
-    client = SlackClient(webhook_url="https://hooks.slack.com/services/T00/B00/XXX")
+    """Test Slack client can be initialized with bot token and channel ID."""
+    client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890")
     assert client is not None
-    assert client.webhook_url == "https://hooks.slack.com/services/T00/B00/XXX"
+    assert client.channel_id == "C1234567890"
 
 
+@pytest.mark.skip(reason="Obsolete: tests old webhook format_message() method")
 def test_format_message_basic(slack_client, sample_stale_prs, sample_team_members):
     """Test formatting a basic Slack message."""
     message = slack_client.format_message(sample_stale_prs, sample_team_members)
@@ -71,6 +77,7 @@ def test_format_message_basic(slack_client, sample_stale_prs, sample_team_member
     assert "stale PRs" in message.lower() or "review" in message.lower()
 
 
+@pytest.mark.skip(reason="Obsolete: tests old webhook format_message() method")
 def test_format_message_includes_pr_details(slack_client, sample_stale_prs, sample_team_members):
     """Test that message includes PR details."""
     message = slack_client.format_message(sample_stale_prs, sample_team_members)
@@ -84,6 +91,7 @@ def test_format_message_includes_pr_details(slack_client, sample_stale_prs, samp
     assert "https://github.com/test-org/api-service/pull/456" in message
 
 
+@pytest.mark.skip(reason="Obsolete: tests old webhook format_message() method")
 def test_format_message_empty_pr_list(slack_client, sample_team_members):
     """Test formatting message with no stale PRs (celebratory message)."""
     message = slack_client.format_message([], sample_team_members)
@@ -96,6 +104,7 @@ def test_format_message_empty_pr_list(slack_client, sample_team_members):
     )
 
 
+@pytest.mark.skip(reason="Obsolete: tests old webhook send_message() method")
 def test_send_message_success(slack_client):
     """Test successful message sending."""
     with patch("requests.post") as mock_post:
@@ -112,6 +121,7 @@ def test_send_message_success(slack_client):
         assert "Test message" in str(call_args[1]["json"])
 
 
+@pytest.mark.skip(reason="Obsolete: tests old webhook send_message() method")
 def test_send_message_failure(slack_client):
     """Test handling of failed message sending."""
     with patch("requests.post") as mock_post:
@@ -124,6 +134,7 @@ def test_send_message_failure(slack_client):
             slack_client.send_message("Test message")
 
 
+@pytest.mark.skip(reason="Obsolete: tests old webhook send_message() method")
 def test_send_message_network_error(slack_client):
     """Test handling of network errors."""
     with patch("requests.post") as mock_post:
@@ -133,6 +144,7 @@ def test_send_message_network_error(slack_client):
             slack_client.send_message("Test message")
 
 
+@pytest.mark.skip(reason="Obsolete: tests old webhook implementation compatibility")
 def test_post_stale_pr_summary_webhook_compatibility(
     slack_client, sample_stale_prs, sample_team_members
 ):
@@ -178,6 +190,7 @@ def test_post_stale_pr_summary_webhook_compatibility(
         assert called_kwargs["timeout"] == 10
 
 
+@pytest.mark.skip(reason="Obsolete: tests old webhook implementation")
 def test_post_stale_pr_summary_full_message_structure(
     slack_client, sample_stale_prs, sample_team_members
 ):

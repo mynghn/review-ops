@@ -59,7 +59,7 @@ def create_mock_stale_pr(
 
 def test_table_header_row_english():
     """Test table header row has correct English column labels."""
-    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+    client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en", max_prs_total=30)
 
     # Build with empty categories to get minimal blocks (header + empty state)
     blocks = client.build_blocks({"rotten": [], "aging": [], "fresh": []}, [])
@@ -104,7 +104,7 @@ def test_table_header_row_english():
 
 def test_table_header_row_korean():
     """Test table header row has correct Korean column labels."""
-    client = SlackClient(webhook_url="mock", language="ko", max_prs_total=30)
+    client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="ko", max_prs_total=30)
 
     # Test the method directly
     header_row = client._build_table_header_row()
@@ -142,7 +142,7 @@ def test_table_header_row_korean():
 
 def test_table_data_row_structure():
     """Test data row has correct cell structure for a single PR."""
-    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+    client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en", max_prs_total=30)
 
     # Create mock PR with reviewers
     pr = create_mock_pr(
@@ -213,7 +213,7 @@ def test_table_data_row_structure():
 
 def test_table_no_reviewers():
     """Test data row displays dash when PR has no reviewers."""
-    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+    client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en", max_prs_total=30)
 
     # Create mock PR with no reviewers
     pr = create_mock_pr(
@@ -240,7 +240,7 @@ def test_table_no_reviewers():
 
 def test_github_team_reviewers_display():
     """Test GitHub team reviewers are displayed with team name and members."""
-    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+    client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en", max_prs_total=30)
 
     # Create GitHub team with members
     github_team = GitHubTeamReviewRequest(
@@ -292,7 +292,7 @@ def test_github_team_reviewers_display():
 
 def test_github_team_and_individual_reviewers_with_deduplication():
     """Test mixed GitHub team and individual reviewers with deduplication."""
-    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+    client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en", max_prs_total=30)
 
     # Create GitHub team with members alice and bob
     github_team = GitHubTeamReviewRequest(
@@ -342,7 +342,7 @@ def test_github_team_and_individual_reviewers_with_deduplication():
 
 def test_multiple_github_teams():
     """Test multiple GitHub teams are displayed correctly."""
-    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+    client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en", max_prs_total=30)
 
     # Create two GitHub teams
     team1 = GitHubTeamReviewRequest(
@@ -395,7 +395,7 @@ def test_multiple_github_teams():
 
 def test_github_team_with_empty_members():
     """Test GitHub team with no members shows appropriate message."""
-    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+    client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en", max_prs_total=30)
 
     # Create GitHub team with empty members (API fetch failed)
     github_team = GitHubTeamReviewRequest(
@@ -427,7 +427,7 @@ def test_github_team_with_empty_members():
 
 def test_github_team_with_no_slack_ids():
     """Test GitHub team members without Slack IDs fall back to @username."""
-    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+    client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en", max_prs_total=30)
 
     # Create GitHub team with members
     github_team = GitHubTeamReviewRequest(
@@ -465,7 +465,7 @@ def test_github_team_with_no_slack_ids():
 
 def test_github_team_with_complete_deduplication():
     """Test GitHub team where all individual reviewers are already in team (no trailing newline)."""
-    client = SlackClient(webhook_url="mock", language="en", max_prs_total=30)
+    client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en", max_prs_total=30)
 
     # Create GitHub team with members alice and bob
     github_team = GitHubTeamReviewRequest(
@@ -513,7 +513,11 @@ def test_github_team_with_complete_deduplication():
 def test_reviewer_filtering_disabled_shows_all_reviewers():
     """Test that with filtering disabled (default), all reviewers are shown."""
     client = SlackClient(
-        webhook_url="mock", language="en", max_prs_total=30, show_non_team_reviewers=True
+        bot_token="xoxb-test-token",
+        channel_id="C1234567890",
+        language="en",
+        max_prs_total=30,
+        show_non_team_reviewers=True,
     )
 
     # Create mock PR with team and non-team reviewers
@@ -546,7 +550,9 @@ def test_reviewer_filtering_disabled_shows_all_reviewers():
 def test_reviewer_filtering_enabled_filters_individual_reviewers():
     """Test that with filtering enabled, only team members are shown."""
     client = SlackClient(
-        webhook_url="mock", language="en", max_prs_total=30, show_non_team_reviewers=False
+        bot_token="xoxb-test-token",
+        channel_id="C1234567890",
+        language="en", max_prs_total=30, show_non_team_reviewers=False
     )
 
     # Create mock PR with team and non-team reviewers
@@ -578,7 +584,9 @@ def test_reviewer_filtering_enabled_filters_individual_reviewers():
 def test_reviewer_filtering_enabled_filters_github_team_members():
     """Test that with filtering enabled, GitHub team members are filtered."""
     client = SlackClient(
-        webhook_url="mock", language="en", max_prs_total=30, show_non_team_reviewers=False
+        bot_token="xoxb-test-token",
+        channel_id="C1234567890",
+        language="en", max_prs_total=30, show_non_team_reviewers=False
     )
 
     # Create GitHub team with team and non-team members
@@ -620,7 +628,9 @@ def test_reviewer_filtering_enabled_filters_github_team_members():
 def test_reviewer_filtering_enabled_skips_empty_github_teams():
     """Test that GitHub teams with no team members after filtering are skipped entirely."""
     client = SlackClient(
-        webhook_url="mock", language="en", max_prs_total=30, show_non_team_reviewers=False
+        bot_token="xoxb-test-token",
+        channel_id="C1234567890",
+        language="en", max_prs_total=30, show_non_team_reviewers=False
     )
 
     # Create GitHub team with only non-team members
@@ -658,7 +668,9 @@ def test_reviewer_filtering_enabled_skips_empty_github_teams():
 def test_reviewer_filtering_enabled_all_reviewers_filtered():
     """Test that when all reviewers are filtered out, dash is displayed."""
     client = SlackClient(
-        webhook_url="mock", language="en", max_prs_total=30, show_non_team_reviewers=False
+        bot_token="xoxb-test-token",
+        channel_id="C1234567890",
+        language="en", max_prs_total=30, show_non_team_reviewers=False
     )
 
     # Create mock PR with only non-team reviewers
@@ -688,7 +700,9 @@ def test_reviewer_filtering_enabled_all_reviewers_filtered():
 def test_reviewer_filtering_enabled_mixed_team_and_github_teams():
     """Test filtering with both GitHub teams and individual reviewers."""
     client = SlackClient(
-        webhook_url="mock", language="en", max_prs_total=30, show_non_team_reviewers=False
+        bot_token="xoxb-test-token",
+        channel_id="C1234567890",
+        language="en", max_prs_total=30, show_non_team_reviewers=False
     )
 
     # Create GitHub team with mixed members

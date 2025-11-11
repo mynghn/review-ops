@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, date
-from unittest.mock import Mock, patch
+from datetime import UTC, date, datetime
+from unittest.mock import patch
 
 import pytest
 
@@ -14,13 +14,13 @@ from slack_client import SlackClient
 @pytest.fixture
 def slack_client_en():
     """Create a Slack client with English language."""
-    return SlackClient(webhook_url="https://hooks.slack.com/services/T00/B00/XXX", language="en")
+    return SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en")
 
 
 @pytest.fixture
 def slack_client_ko():
     """Create a Slack client with Korean language."""
-    return SlackClient(webhook_url="https://hooks.slack.com/services/T00/B00/XXX", language="ko")
+    return SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="ko")
 
 
 @pytest.fixture
@@ -57,23 +57,23 @@ class TestSlackClientInitialization:
 
     def test_initialization_with_language_en(self):
         """Test initialization with English language."""
-        client = SlackClient(webhook_url="https://hooks.slack.com/test", language="en")
+        client = SlackClient(bot_token="xoxb-test", channel_id="C1234567890", language="en")
         assert client.language == "en"
-        assert client.webhook_url == "https://hooks.slack.com/test"
+        assert client.channel_id == "C1234567890"
 
     def test_initialization_with_language_ko(self):
         """Test initialization with Korean language."""
-        client = SlackClient(webhook_url="https://hooks.slack.com/test", language="ko")
+        client = SlackClient(bot_token="xoxb-test", channel_id="C1234567890", language="ko")
         assert client.language == "ko"
 
     def test_initialization_default_language(self):
         """Test initialization defaults to English."""
-        client = SlackClient(webhook_url="https://hooks.slack.com/test")
+        client = SlackClient(bot_token="xoxb-test", channel_id="C1234567890")
         assert client.language == "en"
 
     def test_max_prs_total_default(self):
         """Test max_prs_total default is set correctly."""
-        client = SlackClient(webhook_url="https://hooks.slack.com/services/TEST/TEST/TEST")
+        client = SlackClient(bot_token="xoxb-test", channel_id="C1234567890")
         assert client.max_prs_total == 30
 
 
@@ -428,28 +428,26 @@ class TestPostStalePRSummary:
 
     def test_post_stale_pr_summary_success(self, slack_client_en, sample_stale_pr, sample_team):
         """Test successful posting of stale PR summary."""
-        with patch("requests.post") as mock_post:
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_post.return_value = mock_response
+        with patch.object(slack_client_en.client, "chat_postMessage") as mock_post:
+            mock_post.return_value = {"ts": "1234567890.123456", "ok": True}
 
-            slack_client_en.post_stale_pr_summary([sample_stale_pr], sample_team)
+            result = slack_client_en.post_stale_pr_summary([sample_stale_pr], sample_team)
 
-            # Verify request was made
+            # Verify request was made with correct channel
             mock_post.assert_called_once()
             call_args = mock_post.call_args
-            assert call_args[0][0] == slack_client_en.webhook_url
-            assert "blocks" in call_args[1]["json"]
+            assert call_args[1]["channel"] == slack_client_en.channel_id
+            assert "blocks" in call_args[1]
+            assert result == "1234567890.123456"
 
     def test_post_stale_pr_summary_failure(self, slack_client_en, sample_stale_pr, sample_team):
         """Test handling of failed posting."""
-        with patch("requests.post") as mock_post:
-            mock_response = Mock()
-            mock_response.status_code = 400
-            mock_response.text = "invalid_payload"
-            mock_post.return_value = mock_response
+        from slack_sdk.errors import SlackApiError
 
-            with pytest.raises(Exception, match="Failed to send Slack message"):
+        with patch.object(slack_client_en.client, "chat_postMessage") as mock_post:
+            mock_post.side_effect = SlackApiError("error", {"error": "invalid_auth"})
+
+            with pytest.raises(SlackApiError, match="Failed to send Slack message"):
                 slack_client_en.post_stale_pr_summary([sample_stale_pr], sample_team)
 
     def test_post_stale_pr_summary_groups_by_category(
@@ -488,16 +486,14 @@ class TestPostStalePRSummary:
             StalePR(pr=pr_fresh, staleness_days=2.0),  # fresh (1-3)
         ]
 
-        with patch("requests.post") as mock_post:
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_post.return_value = mock_response
+        with patch.object(slack_client_en.client, "chat_postMessage") as mock_post:
+            mock_post.return_value = {"ts": "1234567890.123456", "ok": True}
 
             slack_client_en.post_stale_pr_summary(stale_prs, sample_team)
 
             # Verify blocks were sent with table format
             call_args = mock_post.call_args
-            blocks = call_args[1]["json"]["blocks"]
+            blocks = call_args[1]["blocks"]
 
             # Should have board header + legend + table
             assert len(blocks) == 3
@@ -535,8 +531,7 @@ class TestTruncation:
         by_category = {"aging": prs, "rotten": [], "fresh": []}
 
         # Test with max_prs_total=10 to trigger truncation
-        slack_client_limited = SlackClient(
-            webhook_url="https://hooks.slack.com/test",
+        slack_client_limited = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890",
             language="en",
             max_prs_total=10
         )
@@ -617,8 +612,7 @@ class TestPRAllocationLogic:
         by_category = {"rotten": rotten_prs, "aging": aging_prs, "fresh": fresh_prs}
 
         # Test with max_prs_total=20 (less than 45 total PRs)
-        client = SlackClient(
-            webhook_url="https://hooks.slack.com/test", language="en", max_prs_total=20
+        client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en", max_prs_total=20
         )
 
         allocated, truncated_count = client._allocate_pr_display(by_category)
@@ -692,8 +686,7 @@ class TestPRAllocationLogic:
         by_category = {"rotten": rotten_prs, "aging": aging_prs, "fresh": fresh_prs}
 
         # Test with max_prs_total=30 (more than 20 total PRs)
-        client = SlackClient(
-            webhook_url="https://hooks.slack.com/test", language="en", max_prs_total=30
+        client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en", max_prs_total=30
         )
 
         allocated, truncated_count = client._allocate_pr_display(by_category)
@@ -731,8 +724,7 @@ class TestPRAllocationLogic:
         by_category = {"rotten": rotten_prs, "aging": aging_prs, "fresh": fresh_prs}
 
         # Test with max_prs_total=20
-        client = SlackClient(
-            webhook_url="https://hooks.slack.com/test", language="en", max_prs_total=20
+        client = SlackClient(bot_token="xoxb-test-token", channel_id="C1234567890", language="en", max_prs_total=20
         )
 
         allocated, truncated_count = client._allocate_pr_display(by_category)

@@ -154,8 +154,11 @@ class Config:
     github_org: str
     """GitHub organization name to scan for PRs"""
 
-    slack_webhook_url: str
-    """Slack incoming webhook URL for sending notifications"""
+    slack_bot_token: str
+    """Slack Bot User OAuth Token for chat.postMessage API"""
+
+    slack_channel_id: str
+    """Slack channel ID where messages will be posted"""
 
     log_level: str = "INFO"
     """Logging level (DEBUG, INFO, WARNING, ERROR)"""
@@ -263,3 +266,20 @@ class APICallMetrics:
             return 100.0
         successful = total_calls - self.failed_calls
         return (successful / total_calls) * 100
+
+
+@dataclass
+class OldPRReport:
+    """A report entry for an old PR time range with GitHub search URL."""
+
+    title: str
+    """Display title for this report (e.g., "PRs updated 31-60 days ago")"""
+
+    pr_count: int
+    """Number of PRs found in this time range"""
+
+    github_url: str
+    """GitHub search URL to view these PRs"""
+
+    time_range_description: str
+    """Human-readable description of time range (e.g., "31-60 days")"""

@@ -744,6 +744,91 @@ class GitHubClient:
         logger.info(f"Returning {len(filtered_prs)} PR(s) after filtering")
         return filtered_prs
 
+    def count_old_prs_by_member(
+        self, org_name: str, team_usernames: set[str], updated_before: date
+    ) -> dict[str, int]:
+        """
+        Count old PRs (updated before cutoff) awaiting review from each team member.
+
+        This is a lightweight method that only counts PRs without fetching full details.
+        Used to determine which team members should be included in old PR reports.
+
+        Args:
+            org_name: Name of the GitHub organization
+            team_usernames: Set of GitHub usernames to count PRs for
+            updated_before: Date cutoff - only count PRs updated before this date
+
+        Returns:
+            Dictionary mapping username to count of old PRs (only includes members with count > 0)
+
+        Raises:
+            subprocess.CalledProcessError: If gh CLI command fails
+            json.JSONDecodeError: If gh CLI output is malformed
+        """
+        # Check rate limit before making API calls
+        self.check_rate_limit()
+
+        old_pr_counts: dict[str, int] = {}
+
+        for username in team_usernames:
+            logger.debug(f"  Counting old PRs for user: {username}")
+
+            try:
+                # Search for PRs with review-requested, updated before cutoff
+                # Only need basic info (repo, number) - no need for full details
+                # Use helper function with default arg to properly bind loop variable
+                def _search_for_user(user=username):
+                    return subprocess.run(
+                        [
+                            "gh",
+                            "search",
+                            "prs",
+                            f"org:{org_name}",
+                            "is:pr",
+                            "state:open",
+                            f"review-requested:{user}",
+                            f"updated:<{updated_before.isoformat()}",
+                            "archived:false",
+                            "-is:draft",
+                            "--json",
+                            "repository,number",  # Minimal fields for counting
+                            "--limit",
+                            "100",  # Reasonable limit for old PRs
+                        ],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                        timeout=30,
+                    )
+
+                result = self._retry_with_backoff(
+                    _search_for_user,
+                    max_retries=3,
+                    backoff_base=2.0,
+                )
+
+                self.metrics.search_calls += 1
+                prs_data = json.loads(result.stdout)
+                count = len(prs_data)
+
+                if count > 0:
+                    old_pr_counts[username] = count
+                    logger.debug(f"\tFound {count} old PR(s) for {username}")
+                else:
+                    logger.debug(f"\tNo old PRs for {username}")
+
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, json.JSONDecodeError) as e:
+                self.metrics.failed_calls += 1
+                logger.warning(f"Failed to count old PRs for {username}: {e}")
+                # Continue with other members even if one fails
+                continue
+
+        logger.info(
+            f"Found old PRs for {len(old_pr_counts)} team member(s) "
+            f"(total: {sum(old_pr_counts.values())} PRs)"
+        )
+        return old_pr_counts
+
     def _fetch_pr_details(self, repo_full_name: str, pr_number: int) -> PullRequest | None:
         """
         Fetch complete PR details using gh pr view.

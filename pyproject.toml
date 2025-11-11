@@ -9,6 +9,7 @@ dependencies = [
     "requests>=2.31",
     "python-dotenv>=1.0",
     "holidays>=0.56",
+    "slack-sdk>=3.26.0",
 ]
 
 [tool.pytest.ini_options]

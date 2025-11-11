@@ -6,13 +6,14 @@ import argparse
 import logging
 import os
 import sys
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 
 from config import load_config, load_team_members
 from github_client import GitHubClient
 from models import StalePR
 from slack_client import SlackClient
 from staleness import calculate_staleness
+from url_builder import build_old_pr_search_url
 
 
 def setup_logging(log_level: str) -> None:
@@ -49,9 +50,11 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        # In dry-run mode, provide a dummy Slack webhook URL if not set
-        if args.dry_run and not os.getenv("SLACK_WEBHOOK_URL"):
-            os.environ["SLACK_WEBHOOK_URL"] = "https://hooks.slack.com/services/DUMMY/DRYRUN/MODE"
+        # In dry-run mode, provide dummy Slack credentials if not set
+        if args.dry_run and not os.getenv("SLACK_BOT_TOKEN"):
+            os.environ["SLACK_BOT_TOKEN"] = "xoxb-DUMMY-DRYRUN-MODE"
+        if args.dry_run and not os.getenv("SLACK_CHANNEL_ID"):
+            os.environ["SLACK_CHANNEL_ID"] = "C0000000000"
 
         # Load configuration
         config = load_config()
@@ -80,7 +83,8 @@ def main() -> int:
         # Initialize clients
         github_client = GitHubClient(token=config.github_token)
         slack_client = SlackClient(
-            webhook_url=config.slack_webhook_url,
+            bot_token=config.slack_bot_token,
+            channel_id=config.slack_channel_id,
             language=config.language,
             max_prs_total=config.max_prs_total,
             show_non_team_reviewers=config.show_non_team_reviewers,
@@ -203,8 +207,52 @@ def main() -> int:
         else:
             # Normal mode: send Block Kit formatted message to Slack
             logger.info("Sending Block Kit formatted Slack notification")
-            slack_client.post_stale_pr_summary(stale_prs, team_members)
-            logger.info("✅ Slack notification sent successfully")
+            message_ts = slack_client.post_stale_pr_summary(stale_prs, team_members)
+            logger.info(f"✅ Slack notification sent successfully (ts={message_ts})")
+
+            # Post old PR report as a single thread reply
+            logger.info("Counting old PRs per team member")
+            cutoff_date = date.today() - timedelta(days=config.gh_search_window_size)
+
+            # Fetch counts of old PRs for each team member
+            team_usernames = {member.github_username for member in team_members}
+            old_pr_counts = github_client.count_old_prs_by_member(
+                org_name=config.github_org,
+                team_usernames=team_usernames,
+                updated_before=cutoff_date,
+            )
+
+            # Generate GitHub search URLs only for members with old PRs
+            old_pr_data = []  # List of (TeamMember, pr_count, url)
+            for member in team_members:
+                if member.github_username in old_pr_counts:
+                    count = old_pr_counts[member.github_username]
+                    try:
+                        url = build_old_pr_search_url(
+                            username=member.github_username,
+                            cutoff_date=cutoff_date,
+                        )
+                        old_pr_data.append((member, count, url))
+                        logger.debug(
+                            f"  Generated old PR URL for {member.github_username} ({count} PRs)"
+                        )
+                    except ValueError as e:
+                        logger.warning(
+                            f"  Failed to generate URL for {member.github_username}: {e}"
+                        )
+                        continue
+
+            # Post single thread message if there are members with old PRs
+            if old_pr_data:
+                logger.info(f"Posting old PR thread reply for {len(old_pr_data)} team member(s)")
+                slack_client.post_old_pr_thread(
+                    thread_ts=message_ts,
+                    old_pr_data=old_pr_data,
+                    cutoff_date=cutoff_date,
+                )
+                logger.info("✅ Old PR report posted successfully")
+            else:
+                logger.info("No old PRs found - skipping thread reply")
 
         # Summary
         if stale_prs:

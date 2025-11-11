@@ -48,20 +48,40 @@ def load_config() -> Config:
         )
         raise ValueError(msg)
 
-    slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL")
-    if not slack_webhook_url:
+    slack_bot_token = os.getenv("SLACK_BOT_TOKEN")
+    if not slack_bot_token:
         msg = (
-            "SLACK_WEBHOOK_URL is required. "
-            "Create a Slack incoming webhook and set the URL in your .env file. "
+            "SLACK_BOT_TOKEN is required. "
+            "Create a Slack App with chat:write scope and install to your workspace. "
+            "Copy the Bot User OAuth Token (starts with xoxb-) and set it in your .env file. "
             "(Or use --dry-run to skip Slack sending)"
         )
         raise ValueError(msg)
 
-    # Validate Slack webhook URL format
-    if not slack_webhook_url.startswith("https://hooks.slack.com/"):
+    # Validate Slack bot token format
+    if not slack_bot_token.startswith("xoxb-"):
         msg = (
-            "SLACK_WEBHOOK_URL must be a valid Slack webhook URL "
-            "(should start with 'https://hooks.slack.com/')."
+            "SLACK_BOT_TOKEN must be a valid Bot User OAuth Token "
+            "(should start with 'xoxb-')."
+        )
+        raise ValueError(msg)
+
+    slack_channel_id = os.getenv("SLACK_CHANNEL_ID")
+    if not slack_channel_id:
+        msg = (
+            "SLACK_CHANNEL_ID is required. "
+            "Right-click your Slack channel, select 'View channel details', "
+            "and copy the Channel ID (starts with C or G). "
+            "Set it in your .env file. "
+            "(Or use --dry-run to skip Slack sending)"
+        )
+        raise ValueError(msg)
+
+    # Validate Slack channel ID format
+    if not (slack_channel_id.startswith("C") or slack_channel_id.startswith("G")):
+        msg = (
+            "SLACK_CHANNEL_ID must be a valid Slack channel ID "
+            "(should start with 'C' for public channels or 'G' for private channels)."
         )
         raise ValueError(msg)
 
@@ -148,7 +168,8 @@ def load_config() -> Config:
     return Config(
         github_token=github_token,
         github_org=github_org,
-        slack_webhook_url=slack_webhook_url,
+        slack_bot_token=slack_bot_token,
+        slack_channel_id=slack_channel_id,
         log_level=log_level,
         gh_search_window_size=gh_search_window_size,
         language=language,

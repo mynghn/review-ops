@@ -24,7 +24,8 @@ class TestLoadConfig:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                 },
                 clear=True,
             ),
@@ -32,7 +33,7 @@ class TestLoadConfig:
             config = load_config()
             assert config.github_token == "ghp_test123"
             assert config.github_org == "test-org"
-            assert config.slack_webhook_url == "https://hooks.slack.com/services/T00/B00/XXX"
+            assert config.slack_bot_token == "xoxb-test-token"
             assert config.log_level == "INFO"  # Default
 
     def test_load_config_with_optional_vars(self):
@@ -44,7 +45,8 @@ class TestLoadConfig:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "LOG_LEVEL": "DEBUG",
                     "GH_SEARCH_WINDOW_SIZE": "60",
                 },
@@ -64,7 +66,8 @@ class TestLoadConfig:
                 os.environ,
                 {
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                 },
                 clear=True,
             ),
@@ -81,7 +84,8 @@ class TestLoadConfig:
                 os.environ,
                 {
                     "GH_TOKEN": "ghp_test123",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                 },
                 clear=True,
             ),
@@ -90,7 +94,7 @@ class TestLoadConfig:
             load_config()
 
     def test_load_config_missing_slack_webhook(self):
-        """Test error when SLACK_WEBHOOK_URL is missing."""
+        """Test error when SLACK_BOT_TOKEN is missing."""
         with (
             patch("config.load_dotenv"),
             patch("shutil.which", return_value="/usr/local/bin/gh"),
@@ -102,12 +106,12 @@ class TestLoadConfig:
                 },
                 clear=True,
             ),
-            pytest.raises(ValueError, match="SLACK_WEBHOOK_URL is required"),
+            pytest.raises(ValueError, match="SLACK_BOT_TOKEN is required"),
         ):
             load_config()
 
     def test_load_config_invalid_slack_webhook(self):
-        """Test error when SLACK_WEBHOOK_URL format is invalid."""
+        """Test error when SLACK_BOT_TOKEN format is invalid."""
         with (
             patch("shutil.which", return_value="/usr/local/bin/gh"),
             patch.dict(
@@ -115,11 +119,12 @@ class TestLoadConfig:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://invalid.com/webhook",
+                    "SLACK_BOT_TOKEN": "https://invalid.com/webhook",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                 },
                 clear=True,
             ),
-            pytest.raises(ValueError, match="must be a valid Slack webhook URL"),
+            pytest.raises(ValueError, match="must be a valid Bot User OAuth Token"),
         ):
             load_config()
 
@@ -132,7 +137,8 @@ class TestLoadConfig:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "LOG_LEVEL": "INVALID",
                 },
                 clear=True,
@@ -151,7 +157,8 @@ class TestLoadConfig:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                 },
                 clear=True,
             ),
@@ -168,7 +175,8 @@ class TestLoadConfig:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "LANGUAGE": "en",
                 },
                 clear=True,
@@ -186,7 +194,8 @@ class TestLoadConfig:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "LANGUAGE": "ko",
                 },
                 clear=True,
@@ -204,7 +213,8 @@ class TestLoadConfig:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "LANGUAGE": "EN",
                 },
                 clear=True,
@@ -222,7 +232,8 @@ class TestLoadConfig:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "LANGUAGE": "fr",
                 },
                 clear=True,
@@ -338,7 +349,8 @@ class TestRateLimitConfigValidation:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "MAX_PRS_TOTAL": "10",
                 },
                 clear=True,
@@ -356,7 +368,8 @@ class TestRateLimitConfigValidation:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "MAX_PRS_TOTAL": "100",
                 },
                 clear=True,
@@ -374,7 +387,8 @@ class TestRateLimitConfigValidation:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "MAX_PRS_TOTAL": "9",
                 },
                 clear=True,
@@ -391,7 +405,8 @@ class TestRateLimitConfigValidation:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "MAX_PRS_TOTAL": "101",
                 },
                 clear=True,
@@ -409,7 +424,8 @@ class TestRateLimitConfigValidation:
                     {
                         "GH_TOKEN": "ghp_test123",
                         "GITHUB_ORG": "test-org",
-                        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                        "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                         "RATE_LIMIT_WAIT_THRESHOLD": str(value),
                     },
                     clear=True,
@@ -427,7 +443,8 @@ class TestRateLimitConfigValidation:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "RATE_LIMIT_WAIT_THRESHOLD": "59",
                 },
                 clear=True,
@@ -445,7 +462,8 @@ class TestRateLimitConfigValidation:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "RATE_LIMIT_WAIT_THRESHOLD": "601",
                 },
                 clear=True,
@@ -463,7 +481,8 @@ class TestRateLimitConfigValidation:
                 {
                     "GH_TOKEN": "ghp_test123",
                     "GITHUB_ORG": "test-org",
-                    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T00/B00/XXX",
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_CHANNEL_ID": "C1234567890",
                     "MAX_PRS_TOTAL": "50",
                     "RATE_LIMIT_WAIT_THRESHOLD": "600",
                 },

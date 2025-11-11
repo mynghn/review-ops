@@ -1,33 +1,38 @@
-"""Slack webhook client for sending notifications."""
+"""Slack client for sending notifications via chat.postMessage API."""
 
 from __future__ import annotations
 
-import requests
 from datetime import date
+
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
 
 from models import PullRequest, StalePR, TeamMember
 
 
 class SlackClient:
-    """Client for sending messages to Slack via webhooks."""
+    """Client for sending messages to Slack via chat.postMessage API."""
 
     def __init__(
         self,
-        webhook_url: str,
+        bot_token: str,
+        channel_id: str,
         language: str = "en",
         max_prs_total: int = 30,
         show_non_team_reviewers: bool = True,
     ) -> None:
         """
-        Initialize Slack client with webhook URL and language.
+        Initialize Slack client with bot token and channel ID.
 
         Args:
-            webhook_url: Slack incoming webhook URL
+            bot_token: Slack Bot User OAuth Token (starts with xoxb-)
+            channel_id: Slack channel ID (starts with C or G)
             language: Language code for message formatting ('en' or 'ko', default: 'en')
             max_prs_total: Total PRs to display across all categories (default: 30)
             show_non_team_reviewers: Whether to show non-team member reviewers (default: True)
         """
-        self.webhook_url = webhook_url
+        self.client = WebClient(token=bot_token)
+        self.channel_id = channel_id
         self.language = language
         self.max_prs_total = max_prs_total
         self.show_non_team_reviewers = show_non_team_reviewers
@@ -170,28 +175,11 @@ class SlackClient:
             return f"<@{slack_id}>"
         return f"@{github_username}"
 
-    def send_message(self, message: str) -> None:
-        """
-        Send a message to Slack via webhook.
-
-        Args:
-            message: Text message to send
-
-        Raises:
-            Exception: If the webhook request fails
-        """
-        payload = {"text": message}
-        response = requests.post(self.webhook_url, json=payload, timeout=10)
-
-        if response.status_code != 200:
-            msg = f"Failed to send Slack message: {response.status_code} - {response.text}"
-            raise Exception(msg)
-
     # Block Kit formatting methods
 
     def post_stale_pr_summary(
         self, stale_prs: list[StalePR], team_members: list[TeamMember]
-    ) -> None:
+    ) -> str:
         """
         Post a Block Kit formatted stale PR summary to Slack.
 
@@ -199,8 +187,11 @@ class SlackClient:
             stale_prs: List of stale pull requests sorted by staleness
             team_members: List of team members for @mentions
 
+        Returns:
+            Message timestamp (ts) for threading
+
         Raises:
-            Exception: If the webhook request fails
+            SlackApiError: If the Slack API request fails
         """
         # Group PRs by category
         by_category: dict[str, list[StalePR]] = {"rotten": [], "aging": [], "fresh": []}
@@ -210,13 +201,102 @@ class SlackClient:
         # Build blocks
         blocks = self.build_blocks(by_category, team_members)
 
-        # Send to Slack
-        payload = {"blocks": blocks}
-        response = requests.post(self.webhook_url, json=payload, timeout=10)
+        # Send to Slack using chat.postMessage
+        try:
+            response = self.client.chat_postMessage(
+                channel=self.channel_id,
+                blocks=blocks
+            )
+            return response["ts"]
+        except SlackApiError as e:
+            error_msg = e.response.get("error", "unknown_error")
+            raise SlackApiError(
+                f"Failed to send Slack message: {error_msg}",
+                response=e.response
+            ) from e
 
-        if response.status_code != 200:
-            msg = f"Failed to send Slack message: {response.status_code} - {response.text}"
-            raise Exception(msg)
+    def post_thread_reply(self, thread_ts: str, text: str) -> None:
+        """
+        Post a reply to a thread in Slack.
+
+        Args:
+            thread_ts: Thread timestamp (from parent message)
+            text: Plain text message to send
+
+        Raises:
+            SlackApiError: If the Slack API request fails
+        """
+        try:
+            self.client.chat_postMessage(
+                channel=self.channel_id,
+                text=text,
+                thread_ts=thread_ts
+            )
+        except SlackApiError as e:
+            error_msg = e.response.get("error", "unknown_error")
+            raise SlackApiError(
+                f"Failed to send thread reply: {error_msg}",
+                response=e.response
+            ) from e
+
+    def post_old_pr_thread(
+        self,
+        thread_ts: str,
+        old_pr_data: list[tuple[TeamMember, int, str]],
+        cutoff_date: date,
+    ) -> None:
+        """
+        Post old PR report as a thread reply with per-user GitHub search links and counts.
+
+        Args:
+            thread_ts: Thread timestamp (from parent message)
+            old_pr_data: List of (TeamMember, pr_count, GitHub URL) tuples
+            cutoff_date: Date threshold used for old PR filtering
+
+        Raises:
+            SlackApiError: If the Slack API request fails
+        """
+        # Bilingual header and labels
+        if self.language == "ko":
+            header = f"⚠️ 오래된 리뷰 요청 ({cutoff_date.isoformat()} 이전 업데이트):"
+            link_text = "보기"
+            pr_text = "개"
+        else:
+            header = f"⚠️ Old PRs awaiting review (updated before {cutoff_date.isoformat()}):"
+            link_text = "View"
+            pr_text = "PR" if len(old_pr_data) == 1 and old_pr_data[0][1] == 1 else "PRs"
+
+        # Build bulleted list of team members with counts and links
+        lines = [header]
+        for member, count, url in old_pr_data:
+            # Format: • @username: N PRs → [View](url)
+            # Use Slack mention if available, otherwise GitHub username
+            user_mention = (
+                f"<@{member.slack_user_id}>"
+                if member.slack_user_id
+                else f"@{member.github_username}"
+            )
+            if self.language == "ko":
+                lines.append(f"• {user_mention}: {count}{pr_text} → <{url}|{link_text}>")
+            else:
+                pr_label = "PR" if count == 1 else "PRs"
+                lines.append(f"• {user_mention}: {count} {pr_label} → <{url}|{link_text}>")
+
+        message = "\n".join(lines)
+
+        try:
+            self.client.chat_postMessage(
+                channel=self.channel_id,
+                text=message,
+                thread_ts=thread_ts,
+                unfurl_links=False,  # Prevent Slack from expanding GitHub URLs
+            )
+        except SlackApiError as e:
+            error_msg = e.response.get("error", "unknown_error")
+            raise SlackApiError(
+                f"Failed to send old PR thread reply: {error_msg}",
+                response=e.response
+            ) from e
 
     def _allocate_pr_display(
         self, by_category: dict[str, list[StalePR]]
@@ -694,8 +774,8 @@ class SlackClient:
 
             # Add team name prefix with @ and opening parenthesis
             elements.append({"type": "text", "text": f"@{github_team.team_name}", "style": {"code": True}})
-            
-            elements.append({"type": "text", "text": f"("})
+
+            elements.append({"type": "text", "text": "("})
             # Add team members
             if members_to_display:
                 for j, member in enumerate(members_to_display):

@@ -131,6 +131,7 @@ Python 3.12: Follow standard conventions
 11. Truncation warning: "⚠️ +{count} more PRs not shown. Check GitHub for full list." / "⚠️ +{count}개 더 있음. 전체 목록은 GitHub에서 확인하세요."
 
 ## Recent Changes
+- 007-old-pr-reporting: Added Python 3.12 (existing) + requests, PyGithub, gh CLI (existing), Slack Block Kit (JSON format)
 - 006-business-day-staleness: Implemented business day staleness calculation
   - Added `holidays>=0.56` library dependency in `pyproject.toml`
   - Added `HOLIDAYS_COUNTRY` configuration field in `src/config.py` with validation
@@ -144,7 +145,6 @@ Python 3.12: Follow standard conventions
   - Supports fractional business days for precise staleness tracking
 - 005-refine-review-filter: Added Python 3.12 (existing) + requests, PyGithub, gh CLI (existing), Slack Block Kit (JSON format)
 
-- Added staleness legend context block to Slack message
   - Added `SlackClient._build_staleness_legend_block()` method for legend generation
   - Legend displays between board header and table with 3 category indicators
   - Categories shown: Rotten (8d+), Aging (4~7d), Fresh (~3d)
@@ -152,7 +152,6 @@ Python 3.12: Follow standard conventions
   - Updated `SlackClient.build_blocks()` to insert legend block
   - Created 4 new unit tests in `TestBuildStalenessLegendBlock` class
   - Updated 5 existing tests to expect new block structure
-- 004-table-view-ui: Added Author column to table view UI
   - Updated table layout from 4 columns to 5 columns (Staleness, Age, PR, Author, Reviewers)
   - Author column uses same English expression for both EN and KO languages
   - Author column displays user Slack mentions (center-aligned)
